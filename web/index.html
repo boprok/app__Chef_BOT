@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<he    <div class="flex items-center gap-3">
+      <a href="#info" class="text-white/90 hover:text-white">Info</a>
+      <a href="#pricing" class="text-white/90 hover:text-white">Pricing</a>
+      <button id="installBtn" class="hidden border border-amber text-white px-3 py-1.5 rounded-md" style="display:none">Install app</button>
+      <button id="signupBtn" type="button" onclick="window.openAuth && window.openAuth('signup')" class="bg-main text-[#05210f] px-4 py-2 rounded-md font-medium hover:bg-[color-mix(in_oklab,var(--clr-main,theme(colors.main))_85%,#fff_15%)]">Sign Up</button>
+      <button id="logoutBtn" type="button" onclick="window.logout && window.logout()" class="border border-amber text-white px-4 py-2 rounded-md font-medium hover:bg-amber/10" style="display:none">Logout</button>
+    </div><meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chef Bot</title>
+  <meta name="theme-color" content="#0e402d" />
+  <!-- Tailwind CSS (CDN) with custom palette -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            deep: '#0e402d',
+            main: '#2ba84a',
+            sun: '#ffc53a',
+            warm: '#e06d06',
+            amber: '#b26700'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="Turn a fridge photo into fast, tasty recipes. Chef Bot makes meal planning effortless." />
+  <meta property="og:title" content="Chef Bot – Fridge to Recipe" />
+  <meta property="og:description" content="Snap a photo of your fridge. Get recipes in seconds." />
+</head>
+<body>
+  <nav class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-2 text-white font-semibold">
+      <img src="/logo.svg" alt="Chef Bot" width="28" height="28" /> Chef Bot
+    </a>
+    <div class="flex items-center gap-3">
+      <a href="#info" class="text-white/90 hover:text-white">Info</a>
+      <a href="#pricing" class="text-white/90 hover:text-white">Pricing</a>
+      <button id="installBtn" class="hidden border border-amber text-white px-3 py-1.5 rounded-md" style="display:none">Install app</button>
+  <button type="button" onclick="window.openAuth && window.openAuth('signup')" class="bg-main text-[#05210f] px-4 py-2 rounded-md font-medium hover:bg-[color-mix(in_oklab,var(--clr-main,theme(colors.main))_85%,#fff_15%)]">Sign Up</button>
+    </div>
+  </nav>
+
+  <header class="hero-landing">
+    <div class="max-w-6xl mx-auto px-4 hero-inner">
+      <div class="py-8 text-center">
+        <h1 class="hero-title text-white">Fridge to recipe in seconds</h1>
+  <p class="hero-sub text-white/90">Upload one photo. Get 3–5 quick meal ideas using what you already have.</p>
+  <p class="text-white/80 max-w-3xl mx-auto mt-2">Stop staring at your fridge and guessing. Chef Bot turns the food you already bought into fast, tasty recipes—so you save money, cut waste, and eat better without planning or scrolling through endless blogs.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4">
+  <section id="app" class="section section--tight-top section--extra-bottom">
+      <form id="upload-form" class="card form max-w-2xl mx-auto">
+        <div id="dropzone" class="dropzone">
+          <p class="dz-title">Upload or drag an image</p>
+          <p class="dz-sub">.jpg, .png • Clear photo of your fridge</p>
+          <button type="button" class="bg-main text-[#05210f] px-4 py-2 rounded-md font-medium">Choose image</button>
+        </div>
+        <input id="file" type="file" accept="image/*" class="hidden" />
+        <textarea id="prompt" placeholder="  Preferences: vegetarian, 15 min, high protein..." class="w-full"></textarea>
+        <button type="submit" class="bg-main text-[#05210f] px-4 py-2 rounded-md font-medium">Analyze</button>
+      </form>
+
+      <section id="status" aria-live="polite"></section>
+      <section id="results" class="cards"></section>
+    </section>
+
+  <section id="info" class="section section--extra-top section--extra-bottom">
+      <h2 class="text-3xl font-semibold mb-3">Why Chef Bot</h2>
+      <p class="text-white/80 mb-2">You already have ingredients at home. Chef Bot helps you turn them into dinner—fast.</p>
+      <p class="text-white/70 mb-4">Point your camera, add a preference if you want (vegetarian, 15 minutes, high‑protein), and we’ll generate clear, step‑by‑step recipes sized to your time and pantry. No sign‑in for the demo, no clutter, just results.</p>
+      <div class="grid features grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <article class="card">
+          <h3>⚡ Instant ideas</h3>
+          <p>One photo in, 3–5 recipes out. Get ingredient lists, substitutions, and clear steps with realistic timing.</p>
+        </article>
+        <article class="card">
+          <h3>🎯 Smart preferences</h3>
+          <p>Add notes like “vegetarian”, “15 min”, or “high protein”. Chef Bot adapts servings, methods, and flavors automatically.</p>
+        </article>
+        <article class="card">
+          <h3>🔒 Private & light</h3>
+          <p>No sign‑up for the demo. Your image is used only to analyze and suggest recipes. It’s fast and built for your phone.</p>
+        </article>
+      </div>
+
+      <div class="mt-8">
+        <h3 class="text-2xl font-semibold mb-3">How it works</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <article class="card">
+            <h4 class="font-semibold mb-1">1) Snap your fridge</h4>
+            <p>Take a clear photo of your fridge or ingredients. The better the lighting, the more accurate the suggestions.</p>
+          </article>
+          <article class="card">
+            <h4 class="font-semibold mb-1">2) Tell us your vibe</h4>
+            <p>Optional: diet, time, cuisine. Add quick notes like “spicy”, “gluten‑free”, or “15 minutes” to tailor results.</p>
+          </article>
+          <article class="card">
+            <h4 class="font-semibold mb-1">3) Cook in minutes</h4>
+            <p>Receive concise recipes with ingredients, substitutions, and step‑by‑step instructions—ready to cook now.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+  <section id="pricing" class="section section--extra-top pricing-zone">
+      <h2 class="text-3xl font-semibold mb-3">Pricing</h2>
+      <div class="billing-toggle">
+        <label>
+          <input type="checkbox" id="billingToggle" />
+          <span>Annual billing <small>(save 10%)</small></span>
+        </label>
+      </div>
+  <div class="grid pricing grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+        <article class="card">
+          <h3><strong>Free</strong> — Try the basics</h3>
+          <p>Perfect for a quick taste of Chef Bot before upgrading.</p>
+          <ul>
+            <li>Up to 10 analyses/month</li>
+            <li>Standard speed</li>
+            <li>Basic features</li>
+          </ul>
+          <p class="price-line"><strong><var class="price" data-monthly="€0" data-annual="€0">€0</var></strong> <span class="period">/mo</span></p>
+          <button class="pricing-btn" onclick="window.openAuth && window.openAuth('login')">Sign in</button>
+        </article>
+        <article class="card highlight">
+          <h3><strong>Plus</strong> — No Limits</h3>
+          <p>For home cooks who want speed, flexibility, and zero monthly limits.</p>
+          <ul>
+            <li>Unlimited analyses</li>
+            <li>Priority processing</li>
+            <li>Advanced features</li>
+          </ul>
+          <p class="price-line"><strong><var class="price" data-monthly="€5" data-annual="€55">€5</var></strong> <span class="period">/mo</span></p>
+          <button class="pricing-btn accent" onclick="document.querySelector('#app')?.scrollIntoView({behavior:'smooth'});">Select plan</button>
+        </article>
+      </div>
+    </section>
+  </main>
+  
+  <!-- Modals -->
+  <div id="modal-auth" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <button class="modal-close" aria-label="Close" onclick="window.closeModal && window.closeModal('modal-auth')">×</button>
+      <div class="auth-toggle">
+        <button type="button" id="auth-tab-signup" class="pill active" onclick="window.setAuthMode && window.setAuthMode('signup')">Create account</button>
+        <button type="button" id="auth-tab-login" class="pill" onclick="window.setAuthMode && window.setAuthMode('login')">Log in</button>
+      </div>
+      <h3 id="auth-title" class="text-2xl font-semibold mb-2">Create account</h3>
+      <p class="text-white/80 mb-3">Access analysis and save your preferences. No spam—just tasty recipes.</p>
+      <form id="auth-form" class="grid gap-2">
+        <label class="grid gap-1">
+          <span class="text-sm text-white/80">Email</span>
+          <input type="email" id="auth-email" required placeholder="you@example.com" />
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-white/80">Password</span>
+          <input type="password" id="auth-pass" required placeholder="••••••••" />
+        </label>
+        <button id="auth-submit" type="submit" class="pricing-btn accent">Continue</button>
+      </form>
+      <p class="text-white/60 text-xs mt-2">By continuing you agree to our <a href="#" class="underline">Terms</a> and <a href="#" class="underline">Privacy</a>.</p>
+    </div>
+  </div>
+
+  <div id="modal-auth-required" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-required-title">
+      <button class="modal-close" aria-label="Close" onclick="window.closeModal && window.closeModal('modal-auth-required')">×</button>
+      <h3 id="auth-required-title" class="text-2xl font-semibold mb-2">Sign in required</h3>
+      <p class="text-white/80 mb-3">Please sign in to analyze your photo and get recipes. It takes 10 seconds.</p>
+      <div class="flex gap-2">
+        <button class="pricing-btn accent" onclick="window.closeModal('modal-auth-required'); window.openAuth('login')">Sign in</button>
+        <button class="pricing-btn" onclick="window.closeModal && window.closeModal('modal-auth-required')">Maybe later</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div>
+        <a href="#" class="inline-flex items-center gap-2 mb-2">
+          <img src="/logo.svg" alt="Chef Bot" width="28" height="28" />
+          <span class="font-semibold">Chef Bot</span>
+        </a>
+        <p class="text-white/70 mt-2">Turn your fridge photo into dinner ideas in seconds. Save time, cut waste, and eat better.</p>
+        <p class="text-white/70 mt-3">Contact: <a class="underline hover:text-white" href="mailto:notasimone@gmail.com">info@notasim.one</a></p>
+      </div>
+      <div>
+        <h4 class="font-semibold mb-2">Product</h4>
+        <ul class="space-y-1 text-white/80">
+          <li><a href="#app" class="hover:text-white">Try the demo</a></li>
+          <li><a href="#info" class="hover:text-white">Info</a></li>
+          <li><a href="#pricing" class="hover:text-white">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="font-semibold mb-2">Company</h4>
+        <ul class="space-y-1 text-white/80">
+          <li><a href="#" class="hover:text-white">About</a></li>
+          <li><a href="#" class="hover:text-white">Privacy</a></li>
+          <li><a href="#" class="hover:text-white">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between border-t border-white/10">
+      <small class="text-white/70">© <span id="year"></span> Chef Bot. All rights reserved.</small>
+      <nav class="flex gap-4 text-white/70 text-sm mt-2 sm:mt-0">
+        <a href="#info" class="hover:text-white">Info</a>
+        <a href="#pricing" class="hover:text-white">Pricing</a>
+        <a href="#app" class="hover:text-white">Try demo</a>
+      </nav>
+    </div>
+  </footer>
+  <div id="toast" aria-live="polite"></div>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    document.getElementById('year').textContent = new Date().getFullYear();
+    // Smooth scroll for in-page nav
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const id = a.getAttribute('href');
+        if (id.length > 1) {
+          e.preventDefault();
+          document.querySelector(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
