@@ -1,9 +1,9 @@
 // Chef Bot API Service
 const API_BASE_URL = __DEV__ 
-  ? 'http://172.19.85.90:8000'    // Direct to local API server
-  : 'http://172.19.85.90:8000';   // Production - same server
+  ? 'https://app-chef-bot-api.onrender.com'    // Render cloud server
+  : 'https://app-chef-bot-api.onrender.com';   // Production - same server
 
-const FALLBACK_URL = 'http://localhost:8000'; // Fallback to localhost
+const FALLBACK_URL = 'http://172.19.85.90:8000'; // Fallback to local server
 
 class ChefBotAPI {
   constructor() {
