@@ -156,8 +156,9 @@ export default function App() {
 
   const closeAuthModal = () => {
     // Prevent closing for first-time users who must complete signup
-    if (isFirstTimeUser && authMode === 'signup') {
-      return; // Don't allow closing
+    // BUT allow closing if they just completed signup (isAuthenticated = true)
+    if (isFirstTimeUser && authMode === 'signup' && !isAuthenticated) {
+      return; // Don't allow closing only if still not authenticated
     }
     
     setShowAuthModal(false);
@@ -187,12 +188,19 @@ export default function App() {
         closeAuthModal();
         Alert.alert('Success', 'Logged in successfully!');
       } else {
+        // SIGNUP FLOW - Update order to fix modal closing
         const response = await authService.signup(email, password);
         setUser(response.user);
         setIsAuthenticated(true);
-        setIsFirstTimeUser(false); // No longer a first-time user
-        closeAuthModal();
-        Alert.alert('Success', 'Welcome to Chef Bot! Account created successfully!');
+        
+        // Set first-time user to false BEFORE closing modal
+        setIsFirstTimeUser(false);
+        
+        // Small delay to ensure state updates are processed
+        setTimeout(() => {
+          closeAuthModal();
+          Alert.alert('Success', 'Welcome to Chef Bot! Account created successfully!');
+        }, 100);
       }
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -214,6 +222,7 @@ export default function App() {
             await authService.logout();
             setIsAuthenticated(false);
             setUser(null);
+            setIsFirstTimeUser(true); // Reset to first-time user state for testing
           }
         }
       ]
