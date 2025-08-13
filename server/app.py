@@ -107,13 +107,13 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-                    email TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    plan TEXT DEFAULT 'free',
-                    is_verified INTEGER DEFAULT 0,
-                    used_free_analyses TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    id UUID PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    plan VARCHAR(50) DEFAULT 'free',
+                    is_verified BOOLEAN DEFAULT FALSE,
+                    used_free_analyses INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
