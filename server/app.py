@@ -14,10 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 import httpx
-import psycopg2
-import psycopg2.extras
-from contextlib import contextmanager
-
 # Always load .env from this server directory (works no matter the CWD)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
@@ -30,9 +26,12 @@ JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-this")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
-# Database connection string for PostgreSQL
-# Database connection string for PostgreSQL
-DATABASE_URL = f"postgresql://postgres:{os.getenv('DB_PASSWORD')}@db.qkdsakgxkxyoqyecjvat.supabase.co:5432/postgres"
+# Supabase headers for REST API
+SUPABASE_HEADERS = {
+    'apikey': SUPABASE_SERVICE_KEY,
+    'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+    'Content-Type': 'application/json'
+}
 
 app = FastAPI(
     title="Chef Bot API",
@@ -92,30 +91,12 @@ class HealthResponse(BaseModel):
     hasKey: bool
     keyPreview: str | None = None
 
-# Database setup
-@contextmanager
-def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = True
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def init_db():
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id UUID PRIMARY KEY,
-                    email VARCHAR(255) UNIQUE NOT NULL,
-                    password_hash VARCHAR(255) NOT NULL,
-                    plan VARCHAR(50) DEFAULT 'free',
-                    is_verified BOOLEAN DEFAULT FALSE,
-                    used_free_analyses INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+# Database setup - Using Supabase REST API
+async def init_db():
+    """Initialize database tables using Supabase SQL"""
+    # Note: In Supabase, you typically create tables via the dashboard or migration files
+    # This is just for logging purposes
+    print("✅ Using Supabase database - tables should be created via dashboard")
 
 # Initialize database on startup (commented for now)
 # init_db()
@@ -140,13 +121,20 @@ def verify_token(token: str) -> str:
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     user_id = verify_token(credentials.credentials)
-    with get_db() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-            user = cur.fetchone()
-            if not user:
-                raise HTTPException(status_code=401, detail="User not found")
-            return dict(user)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
+            headers=SUPABASE_HEADERS
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Database error")
+        
+        users = response.json()
+        if not users:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return users[0]
 
 # --- User management ---
 FREE_MAX_MONTHLY = int(os.getenv("FREE_MAX_MONTHLY", "10"))
@@ -156,7 +144,7 @@ def _current_month() -> str:
     now = datetime.utcnow()
     return f"{now.year}-{now.month:02d}"
 
-def check_and_update_usage(user: dict) -> bool:
+async def check_and_update_usage(user: dict) -> bool:
     """Check if user can make analysis and update usage. Returns True if allowed."""
     if user["plan"] == "plus":
         return True
@@ -164,69 +152,99 @@ def check_and_update_usage(user: dict) -> bool:
     current_month = _current_month()
     
     # Reset usage if new month
-    if user["usage_month"] != current_month:
-        with get_db() as conn:
-            conn.execute(
-                "UPDATE users SET monthly_usage = 0, usage_month = ? WHERE id = ?",
-                (current_month, user["id"])
+    if user.get("usage_month") != current_month:
+        async with httpx.AsyncClient() as client:
+            update_data = {"monthly_usage": 0, "usage_month": current_month}
+            response = await client.patch(
+                f"{SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                headers=SUPABASE_HEADERS,
+                json=update_data
             )
-            conn.commit()
+            if response.status_code not in [200, 204]:
+                return False
+                
         user["monthly_usage"] = 0
         user["usage_month"] = current_month
     
     # Check limit
-    if user["monthly_usage"] >= FREE_MAX_MONTHLY:
+    if user.get("monthly_usage", 0) >= FREE_MAX_MONTHLY:
         return False
     
     # Increment usage
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE users SET monthly_usage = monthly_usage + 1 WHERE id = ?",
-            (user["id"],)
+    async with httpx.AsyncClient() as client:
+        new_usage = user.get("monthly_usage", 0) + 1
+        update_data = {"monthly_usage": new_usage}
+        response = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+            headers=SUPABASE_HEADERS,
+            json=update_data
         )
-        conn.commit()
+        if response.status_code not in [200, 204]:
+            return False
     
     return True
 
 @app.post("/api/auth/signup", response_model=AuthResponse)
 async def signup(user_data: UserCreate):
-    with get_db() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Check if user exists
-            cur.execute("SELECT id FROM users WHERE email = %s", (user_data.email,))
-            existing = cur.fetchone()
-            if existing:
-                raise HTTPException(status_code=400, detail="Email already registered")
-            
-            # Create user
-            password_hash = hash_password(user_data.password)
-            
-            cur.execute(
-                "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id",
-                (user_data.email, password_hash)
-            )
-            user_id = cur.fetchone()["id"]
-            
-            token = create_token(str(user_id))
-            return AuthResponse(
-                token=token,
-                user={"id": str(user_id), "email": user_data.email, "plan": "free"}
-            )
+    async with httpx.AsyncClient() as client:
+        # Check if user exists
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/users?email=eq.{user_data.email}&select=id",
+            headers=SUPABASE_HEADERS
+        )
+        
+        if response.status_code == 200 and response.json():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Create user
+        password_hash = hash_password(user_data.password)
+        user_id = str(uuid.uuid4())
+        
+        user_payload = {
+            "id": user_id,
+            "email": user_data.email,
+            "password_hash": password_hash,
+            "plan": "free",
+            "is_verified": 0,  # Use 0/1 instead of False/True for smallint fields
+            "used_free_analyses": 0
+        }
+        
+        response = await client.post(
+            f"{SUPABASE_URL}/rest/v1/users",
+            headers=SUPABASE_HEADERS,
+            json=user_payload
+        )
+        
+        if response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail="Failed to create user")
+        
+        token = create_token(user_id)
+        return AuthResponse(
+            token=token,
+            user={"id": user_id, "email": user_data.email, "plan": "free"}
+        )
 
 @app.post("/api/auth/login", response_model=AuthResponse)
 async def login(user_data: UserLogin):
-    with get_db() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT * FROM users WHERE email = %s", (user_data.email,))
-            user = cur.fetchone()
-            if not user or not verify_password(user_data.password, user["password_hash"]):
-                raise HTTPException(status_code=401, detail="Invalid email or password")
-            
-            token = create_token(str(user["id"]))
-            return AuthResponse(
-                token=token,
-                user={"id": str(user["id"]), "email": user["email"], "plan": user["plan"]}
-            )
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/users?email=eq.{user_data.email}",
+            headers=SUPABASE_HEADERS
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Database error")
+        
+        users = response.json()
+        if not users or not verify_password(user_data.password, users[0]["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        user = users[0]
+        token = create_token(str(user["id"]))
+        return AuthResponse(
+            token=token,
+            user={"id": str(user["id"]), "email": user["email"], "plan": user["plan"]}
+        )
 
 @app.get("/api/auth/me")
 async def get_current_user_profile(user: dict = Depends(get_current_user)):
@@ -234,13 +252,14 @@ async def get_current_user_profile(user: dict = Depends(get_current_user)):
     current_month = _current_month()
     
     # Update usage month if needed
-    if user["usage_month"] != current_month:
-        with get_db() as conn:
-            conn.execute(
-                "UPDATE users SET monthly_usage = 0, usage_month = ? WHERE id = ?",
-                (current_month, user["id"])
+    if user.get("usage_month") != current_month:
+        async with httpx.AsyncClient() as client:
+            update_data = {"monthly_usage": 0, "usage_month": current_month}
+            await client.patch(
+                f"{SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                headers=SUPABASE_HEADERS,
+                json=update_data
             )
-            conn.commit()
         user["monthly_usage"] = 0
         user["usage_month"] = current_month
     
@@ -248,7 +267,7 @@ async def get_current_user_profile(user: dict = Depends(get_current_user)):
         "id": user["id"],
         "email": user["email"],
         "plan": user["plan"],
-        "monthly_usage": user["monthly_usage"],
+        "monthly_usage": user.get("monthly_usage", 0),
         "monthly_limit": None if user["plan"] == "plus" else FREE_MAX_MONTHLY,
         "usage_month": user["usage_month"],
         "created_at": user["created_at"]
@@ -335,7 +354,7 @@ async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: di
         raise HTTPException(status_code=400, detail="Only image uploads are supported.")
 
     # Check usage limits for free tier
-    if not check_and_update_usage(user):
+    if not await check_and_update_usage(user):
         raise HTTPException(
             status_code=429, 
             detail=f"Free plan limit reached: {FREE_MAX_MONTHLY} analyses this month. Upgrade to Plus for unlimited usage."
@@ -370,3 +389,7 @@ async def health():
     has_key = bool(key)
     preview = (key[:4] + "..." + key[-2:]) if has_key and len(key) > 8 else (key if has_key else None)
     return HealthResponse(provider=provider, model=model, hasKey=has_key, keyPreview=preview)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
