@@ -14,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 import httpx
-import sqlite3
+import psycopg2
+import psycopg2.extras
 from contextlib import contextmanager
 
 # Always load .env from this server directory (works no matter the CWD)
@@ -24,7 +25,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 PROVIDER = os.getenv("PROVIDER", "auto").lower()
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-this")
-DATABASE_PATH = os.path.join(os.path.dirname(__file__), "chef_bot.db")
+
+# Supabase configuration
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+# Database connection string for PostgreSQL
+# Database connection string for PostgreSQL
+DATABASE_URL = f"postgresql://postgres:{os.getenv('DB_PASSWORD')}@db.qkdsakgxkxyoqyecjvat.supabase.co:5432/postgres"
 
 app = FastAPI(
     title="Chef Bot API",
@@ -87,8 +95,8 @@ class HealthResponse(BaseModel):
 # Database setup
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
     try:
         yield conn
     finally:
@@ -96,21 +104,21 @@ def get_db():
 
 def init_db():
     with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                plan TEXT DEFAULT 'free',
-                monthly_usage INTEGER DEFAULT 0,
-                usage_month TEXT DEFAULT '',
-                created_at TEXT NOT NULL
-            )
-        """)
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    plan TEXT DEFAULT 'free',
+                    is_verified INTEGER DEFAULT 0,
+                    used_free_analyses TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
 
-# Initialize database on startup
-init_db()
+# Initialize database on startup (commented for now)
+# init_db()
 
 # Auth helpers
 def hash_password(password: str) -> str:
@@ -133,10 +141,12 @@ def verify_token(token: str) -> str:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     user_id = verify_token(credentials.credentials)
     with get_db() as conn:
-        user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        return dict(user)
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            user = cur.fetchone()
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+            return dict(user)
 
 # --- User management ---
 FREE_MAX_MONTHLY = int(os.getenv("FREE_MAX_MONTHLY", "10"))
@@ -181,40 +191,42 @@ def check_and_update_usage(user: dict) -> bool:
 @app.post("/api/auth/signup", response_model=AuthResponse)
 async def signup(user_data: UserCreate):
     with get_db() as conn:
-        # Check if user exists
-        existing = conn.execute("SELECT id FROM users WHERE email = ?", (user_data.email,)).fetchone()
-        if existing:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        
-        # Create user
-        user_id = str(uuid.uuid4())
-        password_hash = hash_password(user_data.password)
-        created_at = datetime.utcnow().isoformat()
-        
-        conn.execute(
-            "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-            (user_id, user_data.email, password_hash, created_at)
-        )
-        conn.commit()
-        
-        token = create_token(user_id)
-        return AuthResponse(
-            token=token,
-            user={"id": user_id, "email": user_data.email, "plan": "free"}
-        )
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Check if user exists
+            cur.execute("SELECT id FROM users WHERE email = %s", (user_data.email,))
+            existing = cur.fetchone()
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            
+            # Create user
+            password_hash = hash_password(user_data.password)
+            
+            cur.execute(
+                "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id",
+                (user_data.email, password_hash)
+            )
+            user_id = cur.fetchone()["id"]
+            
+            token = create_token(str(user_id))
+            return AuthResponse(
+                token=token,
+                user={"id": str(user_id), "email": user_data.email, "plan": "free"}
+            )
 
 @app.post("/api/auth/login", response_model=AuthResponse)
 async def login(user_data: UserLogin):
     with get_db() as conn:
-        user = conn.execute("SELECT * FROM users WHERE email = ?", (user_data.email,)).fetchone()
-        if not user or not verify_password(user_data.password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        
-        token = create_token(user["id"])
-        return AuthResponse(
-            token=token,
-            user={"id": user["id"], "email": user["email"], "plan": user["plan"]}
-        )
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM users WHERE email = %s", (user_data.email,))
+            user = cur.fetchone()
+            if not user or not verify_password(user_data.password, user["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            
+            token = create_token(str(user["id"]))
+            return AuthResponse(
+                token=token,
+                user={"id": str(user["id"]), "email": user["email"], "plan": user["plan"]}
+            )
 
 @app.get("/api/auth/me")
 async def get_current_user_profile(user: dict = Depends(get_current_user)):
