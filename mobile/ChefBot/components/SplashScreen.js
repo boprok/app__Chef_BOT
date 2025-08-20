@@ -2,12 +2,13 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SvgXml } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { styles } from '../styles/AppStyles';
 import { logoSvg } from '../assets/svgIcons';
 
 export const SplashScreen = () => {
   return (
-    <View style={styles.splashContainer}>
+    <SafeAreaView style={styles.splashContainer} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar style="light" />
       <View style={styles.splashContent}>
         {/* Logo */}
@@ -34,6 +35,6 @@ export const SplashScreen = () => {
       <View style={styles.splashBottom}>
         <Text style={styles.tagline}>Turn ingredients into dinner, fast.</Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };

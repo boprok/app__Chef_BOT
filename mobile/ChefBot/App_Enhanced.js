@@ -228,12 +228,12 @@ export default function App() {
           isAuthenticated={isAuthenticated}
           onLoginPress={() => openAuthModal('login')}
           onProfilePress={openProfileModal}
-          onGoProPress={openGoProModal}
         />
         
         <MainContent 
           isAuthenticated={isAuthenticated}
-          user={user}
+          onSignUpPress={() => openAuthModal('signup')}
+          onUpgradePress={openGoProModal}
         />
 
         {/* Auth Modal */}

@@ -148,6 +148,7 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
   },
   transparentModalOverlay: {
     flex: 1,
@@ -326,16 +327,119 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  proBadgeContainer: {
+    backgroundColor: '#ffd700',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#ffaa00',
+  },
+  proBadgeText: {
+    color: '#000000',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  proBadgeSubtext: {
+    color: '#333333',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    color: '#666666',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  retryButton: {
+    backgroundColor: '#FF6B6B',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Photo Upload Styles
+  photoUploadBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#ffc53a',
+    borderStyle: 'dashed',
+    padding: 32,
+    marginTop: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
+  photoUploadContent: {
+  flex: 1,
+  width: '100%',
+  height: '100%',
+  alignItems: 'center',
+  justifyContent: 'center',
+  },
+  photoUploadIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  photoUploadTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  photoUploadSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  menuLogoContainer: {
+    padding: 8,
+  },
+  menuLogo: {
+    width: 80,
+    height: 32,
+  },
 
   // Go Pro Page styles
   goProPageContainer: {
     width: '95%',
     maxHeight: '90%',
+    alignSelf: 'center',
+    justifyContent: 'center',
   },
   goProPageContent: {
     backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   goProPageTitle: {
     fontSize: 28,

@@ -1,98 +1,205 @@
-import React from 'react';
-import { ScrollView, View, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert, Image, TextInput } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../styles/AppStyles';
+import * as ImagePicker from 'expo-image-picker';
+import { recipeAPI } from '../services/api';
+import { LimitReachedModal } from './modals/LimitReachedModal';
+import { GoProPageModal } from './modals/GoProPageModal';
 
-export const MainContent = ({ onStartCooking, onOpenProfile, isAuthenticated, user }) => {
+export const MainContent = ({ isAuthenticated, user }) => {
+  // Handler for Analyze button
+  const [analyzing, setAnalyzing] = useState(false);
+  const [limitModalVisible, setLimitModalVisible] = useState(false);
+  const [goProModalVisible, setGoProModalVisible] = useState(false);
+
+  const handleAnalyze = async () => {
+    if (!selectedImage) return;
+    setAnalyzing(true);
+    try {
+      const result = await recipeAPI.analyzeImage(selectedImage, preference);
+      // You can customize this to show a modal or navigate to a result screen
+      Alert.alert('Analysis Result', result?.result || 'Success!');
+    } catch (error) {
+      if (error.message && error.message.includes('429') && error.message.includes('limit')) {
+        setLimitModalVisible(true);
+      } else {
+        Alert.alert('Error', error.message || 'Failed to analyze image.');
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+  // Function to open camera and set selected image
+  const openCamera = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission required', 'Camera permission is required to take a photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Do not crop, allow full/original image
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not open camera.');
+    }
+  };
+
+  // Function to open gallery and set selected image
+  const openGallery = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission required', 'Gallery permission is required to select a photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Do not crop, allow full/original image
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not open gallery.');
+    }
+  };
+  const insets = useSafeAreaInsets();
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [preference, setPreference] = useState("");
+  const preferenceInputRef = React.useRef(null);
+
+  const handleImagePicker = () => {
+    Alert.alert(
+      "Select Photo",
+      "Choose how you'd like to add your photo",
+      [
+        {
+          text: "Camera",
+          onPress: () => openCamera(),
+        },
+        {
+          text: "Gallery",
+          onPress: () => openGallery(),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ]
+    );
+  };
+
   return (
-    <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-      {/* Why Chef Bot Section */}
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>Why Chef Bot</Text>
-        <Text style={styles.sectionDescription}>
-          You already have ingredients at home. Chef Bot helps you turn them into dinner—fast.
-        </Text>
-        <Text style={styles.sectionSubtext}>
-          Point your camera, add a preference if you want (vegetarian, 15 minutes, high-protein), and we'll generate clear, step-by-step recipes sized to your time and pantry. No sign-in for the demo, no clutter, just results.
-        </Text>
-
-        {/* Feature Cards Row 1 */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardScrollContainer}>
-          <View style={styles.featureCard}>
-            <Text style={styles.cardIcon}>⚡</Text>
-            <Text style={styles.cardTitle}>Instant ideas</Text>
-            <Text style={styles.cardDescription}>
-              One photo in, 3–5 recipes out. Get ingredient lists, substitutions, and clear steps with realistic timing.
-            </Text>
-          </View>
-          
-          <View style={styles.featureCard}>
-            <Text style={styles.cardIcon}>🎯</Text>
-            <Text style={styles.cardTitle}>Smart preferences</Text>
-            <Text style={styles.cardDescription}>
-              Add notes like "vegetarian", "15 min", or "high protein". Chef Bot adapts servings, methods, and flavors automatically.
-            </Text>
-          </View>
-          
-          <View style={styles.featureCard}>
-            <Text style={styles.cardIcon}>🔒</Text>
-            <Text style={styles.cardTitle}>Private & light</Text>
-            <Text style={styles.cardDescription}>
-              No sign-up for the demo. Your image is used only to analyze and suggest recipes. It's fast and built for your phone.
-            </Text>
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* How it works Section */}
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>How it works</Text>
-        
-        {/* How-to Cards Row 2 */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardScrollContainer}>
-          <View style={styles.howToCard}>
-            <Text style={styles.stepNumber}>1)</Text>
-            <Text style={styles.cardTitle}>Snap your fridge</Text>
-            <Text style={styles.cardDescription}>
-              Take a clear photo of your fridge or ingredients. The better the lighting, the more accurate the suggestions.
-            </Text>
-          </View>
-          
-          <View style={styles.howToCard}>
-            <Text style={styles.stepNumber}>2)</Text>
-            <Text style={styles.cardTitle}>Tell us your vibe</Text>
-            <Text style={styles.cardDescription}>
-              Optional: diet, time, cuisine. Add quick notes like "spicy", "gluten-free", or "15 minutes" to tailor results.
-            </Text>
-          </View>
-          
-          <View style={styles.howToCard}>
-            <Text style={styles.stepNumber}>3)</Text>
-            <Text style={styles.cardTitle}>Cook in minutes</Text>
-            <Text style={styles.cardDescription}>
-              Receive concise recipes with ingredients, substitutions, and step-by-step instructions—ready to cook now.
-            </Text>
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* Action Buttons */}
-      <View style={styles.actionSection}>
-        <TouchableOpacity 
-          style={styles.primaryButton}
-          onPress={onStartCooking}
-        >
-          <Text style={styles.primaryButtonText}>Start Cooking</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.secondaryButton}
-          onPress={onOpenProfile}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {isAuthenticated ? user?.email?.split('@')[0] || 'Profile' : 'Sign In'}
+    <View style={{ flex: 1, backgroundColor: '#181818' }}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 20 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={40}
+      >
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Upload Your Photo</Text>
+          <Text style={styles.sectionDescription}>
+            Take a photo of your ingredients or select one from your gallery to get recipe suggestions
           </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <TouchableOpacity
+            style={[styles.photoUploadBox, { overflow: 'hidden' }]}
+            onPress={handleImagePicker}
+            activeOpacity={0.7}
+          >
+            <View style={styles.photoUploadContent}>
+              {selectedImage ? (
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={{ width: '100%', height: '100%', borderRadius: 14 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <>
+                  <Text style={styles.photoUploadIcon}>📸</Text>
+                  <Text style={styles.photoUploadTitle}>Add Photo</Text>
+                  <Text style={styles.photoUploadSubtitle}>Camera or Gallery</Text>
+                </>
+              )}
+            </View>
+          </TouchableOpacity>
+          {/* Preference Text Box */}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[
+              styles.photoUploadBox,
+              {
+                marginTop: 12,
+                paddingBottom: 12,
+                paddingTop: 16,
+                minHeight: 48,
+                justifyContent: 'center',
+                alignItems: 'center',
+              },
+            ]}
+            onPress={() => preferenceInputRef && preferenceInputRef.current && preferenceInputRef.current.focus()}
+          >
+            <Text style={[styles.photoUploadTitle, { color: '#fff' }]}>Preferences</Text>
+            <TextInput
+              ref={preferenceInputRef}
+              style={{
+                width: '100%',
+                minHeight: 40,
+                borderRadius: 12,
+                borderWidth: 0,
+                backgroundColor: 'transparent',
+                color: '#fff',
+                fontSize: 16,
+                marginTop: 4,
+                paddingVertical: 2,
+                textAlignVertical: 'top',
+                textAlign: 'center',
+              }}
+              placeholder="e.g. No peanuts, vegan, high protein..."
+              placeholderTextColor="#bbb"
+              value={preference}
+              onChangeText={setPreference}
+              multiline
+              numberOfLines={2}
+              underlineColorAndroid="transparent"
+            />
+          </TouchableOpacity>
+          {/* Analyze Button */}
+          <TouchableOpacity
+            style={[styles.primaryButton, { marginTop: 24, opacity: (!selectedImage || analyzing) ? 0.6 : 1 }]}
+            onPress={handleAnalyze}
+            activeOpacity={0.8}
+            disabled={!selectedImage || analyzing}
+          >
+            <Text style={styles.primaryButtonText}>
+              {analyzing ? 'Analyzing...' : 'Analyze'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
+      {/* Modals */}
+      <LimitReachedModal
+        visible={limitModalVisible}
+        onClose={() => setLimitModalVisible(false)}
+        onGoPro={() => {
+          setLimitModalVisible(false);
+          setTimeout(() => setGoProModalVisible(true), 300);
+        }}
+      />
+      <GoProPageModal
+        visible={goProModalVisible}
+        onClose={() => setGoProModalVisible(false)}
+      />
+    </View>
   );
-};
+}

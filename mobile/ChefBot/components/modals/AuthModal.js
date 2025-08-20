@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { styles } from '../styles/AppStyles';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { styles } from '../../styles/AppStyles';
 
 export const AuthModal = ({ 
   visible, 
@@ -24,6 +25,8 @@ export const AuthModal = ({
   onSubmit,
   isFirstTimeUser 
 }) => {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Modal
       animationType="slide"
@@ -31,7 +34,10 @@ export const AuthModal = ({
       visible={visible}
       onRequestClose={onClose}
     >
-      <View style={isFirstTimeUser ? styles.transparentModalOverlay : styles.modalOverlay}>
+      <View style={[
+        isFirstTimeUser ? styles.transparentModalOverlay : styles.modalOverlay,
+        { paddingTop: insets.top, paddingBottom: insets.bottom }
+      ]}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.authModalContainer}>
             {!isFirstTimeUser && (

@@ -1,8 +1,8 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { styles } from '../styles/AppStyles';
-import { proBadgeSvg } from '../assets/svgIcons';
+import { styles } from '../../styles/AppStyles';
+import { proBadgeSvg } from '../../assets/svgIcons';
 
 export const GoProPageModal = ({ visible, onClose }) => {
   return (

@@ -168,6 +168,7 @@ async def check_and_update_usage(user: dict) -> bool:
     
     # Check limit
     if user.get("monthly_usage", 0) >= FREE_MAX_MONTHLY:
+        print(f"LIMIT REACHED: user_id={user['id']} usage={user.get('monthly_usage')} limit={FREE_MAX_MONTHLY}")
         return False
     
     # Increment usage
@@ -365,6 +366,7 @@ async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: di
         await asyncio.sleep(FREE_DELAY_SECONDS)
 
     provider = _choose_provider()
+    print(f"ANALYZE: user_id={user['id']} email={user.get('email')} plan={user.get('plan')} monthly_usage={user.get('monthly_usage')} usage_month={user.get('usage_month')}")
     return await call_gemini_vision(image_bytes, prompt, mime_type=mime_type)
 
 @app.get("/")
