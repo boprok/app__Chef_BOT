@@ -277,11 +277,16 @@ async def get_current_user_profile(user: dict = Depends(get_current_user)):
         user["monthly_usage"] = 0
         user["usage_month"] = current_month
     
+    # For free users, recipes_left = FREE_MAX_MONTHLY - used_free_analyses
+    recipes_left = None
+    if user["plan"] == "free":
+        used = user.get("used_free_analyses", 0)
+        recipes_left = FREE_MAX_MONTHLY - used
     return {
         "id": user["id"],
         "email": user["email"],
         "plan": user["plan"],
-        "monthly_usage": user.get("monthly_usage", 0),
+        "recipes_left": recipes_left,
         "monthly_limit": None if user["plan"] == "plus" else FREE_MAX_MONTHLY,
         "usage_month": user["usage_month"],
         "created_at": user["created_at"]
