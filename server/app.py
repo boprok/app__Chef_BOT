@@ -146,6 +146,8 @@ def _current_month() -> str:
 
 async def check_and_update_usage(user: dict) -> bool:
     """Check if user can make analysis and update usage. Returns True if allowed."""
+    log_debug(f"check_and_update_usage: user_id={user['id']} usage={user.get('monthly_usage')} month={user.get('usage_month')} plan={user.get('plan')}")
+    
     if user["plan"] == "plus":
         return True
     
@@ -183,6 +185,7 @@ async def check_and_update_usage(user: dict) -> bool:
         if response.status_code not in [200, 204]:
             return False
     
+    log_debug(f"USAGE ALLOWED: user_id={user['id']} new_usage={user.get('monthly_usage', 0) + 1}")
     return True
 
 @app.post("/api/auth/signup", response_model=AuthResponse)
@@ -357,6 +360,7 @@ async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: di
 
     # Check usage limits for free tier
     if not await check_and_update_usage(user):
+        log_debug(f"RAISING 429 for user_id={user['id']}")
         raise HTTPException(
             status_code=429, 
             detail=f"Free plan limit reached: {FREE_MAX_MONTHLY} analyses this month. Upgrade to Plus for unlimited usage."
