@@ -151,7 +151,8 @@ export default function App() {
         result = await authService.signup(email, password);
       }
 
-      if (result.success) {
+      // Backend returns {token, user} on success
+      if (result.token && result.user) {
         setIsAuthenticated(true);
         setUser(result.user);
         setIsFirstTimeUser(false);
@@ -164,7 +165,7 @@ export default function App() {
           authMode === 'login' ? 'Welcome back!' : 'Account created successfully!'
         );
       } else {
-        Alert.alert('Error', result.message || 'Authentication failed');
+        Alert.alert('Error', 'Authentication failed - Invalid response format');
       }
     } catch (error) {
       console.error('Auth error:', error);

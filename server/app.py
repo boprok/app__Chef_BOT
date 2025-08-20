@@ -253,6 +253,14 @@ async def call_gemini_vision(image_bytes: bytes, user_prompt: str, mime_type: st
         if not text:
             return AnalyzeResponse(ingredients=[], recipes=[])
 
+        import json as _json
+        try:
+            parsed = _json.loads(text)
+            return AnalyzeResponse(**parsed)
+        except Exception as e:
+            log_debug(f"Failed to parse Gemini response: {e}, text: {text}")
+            return AnalyzeResponse(ingredients=[], recipes=[])
+
 # ===== API ENDPOINTS =====
 
 # Authentication endpoints
