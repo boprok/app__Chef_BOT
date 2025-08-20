@@ -168,7 +168,7 @@ async def check_and_update_usage(user: dict) -> bool:
     
     # Check limit
     if user.get("monthly_usage", 0) >= FREE_MAX_MONTHLY:
-        print(f"LIMIT REACHED: user_id={user['id']} usage={user.get('monthly_usage')} limit={FREE_MAX_MONTHLY}")
+        log_debug(f"LIMIT REACHED: user_id={user['id']} usage={user.get('monthly_usage')} limit={FREE_MAX_MONTHLY}")
         return False
     
     # Increment usage
@@ -348,6 +348,7 @@ async def call_gemini_vision(image_bytes: bytes, user_prompt: str, mime_type: st
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: dict = Depends(get_current_user)):
+    log_debug("ANALYZE endpoint called")
     image_bytes = await file.read()
     # Determine MIME type for Gemini
     mime_type = file.content_type or "image/jpeg"
@@ -395,3 +396,9 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+import sys
+
+def log_debug(msg):
+    print(msg)
+    sys.stdout.flush()
