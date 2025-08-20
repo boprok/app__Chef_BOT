@@ -165,13 +165,15 @@ async def check_and_update_usage(user: dict) -> bool:
         used = 0
         async with httpx.AsyncClient() as client:
             update_data = {"used_free_analyses": 0, "usage_month": current_month}
+            headers = SUPABASE_HEADERS.copy()
+            headers["Prefer"] = "return=representation"
             response = await client.patch(
                 f"{SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
-                headers=SUPABASE_HEADERS,
+                headers=headers,
                 json=update_data
             )
             if response.status_code not in [200, 204]:
-                log_debug(f"Failed to reset used_free_analyses for user_id={user['id']}")
+                log_debug(f"Failed to reset used_free_analyses for user_id={user['id']}, status={response.status_code}, body={response.text}")
                 return False
         user["used_free_analyses"] = 0
         user["usage_month"] = current_month
