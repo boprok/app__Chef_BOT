@@ -8,7 +8,7 @@ import { recipeAPI } from '../services/api';
 import { LimitReachedModal } from './modals/LimitReachedModal';
 import { GoProPageModal } from './modals/GoProPageModal';
 
-export const MainContent = ({ isAuthenticated, user }) => {
+export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
   // Handler for Analyze button
   const [analyzing, setAnalyzing] = useState(false);
   const [limitModalVisible, setLimitModalVisible] = useState(false);
@@ -19,7 +19,10 @@ export const MainContent = ({ isAuthenticated, user }) => {
     setAnalyzing(true);
     try {
       const result = await recipeAPI.analyzeImage(selectedImage, preference);
-      // You can customize this to show a modal or navigate to a result screen
+      // Refresh dashboard stats after successful analysis
+      if (typeof refreshDashboard === 'function') {
+        refreshDashboard();
+      }
       Alert.alert('Analysis Result', result?.result || 'Success!');
     } catch (error) {
       if (error.message && error.message.includes('429') && error.message.includes('limit')) {

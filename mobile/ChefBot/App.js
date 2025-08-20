@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { 
   StyleSheet, 
@@ -24,17 +23,45 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
-  
   // Modal states
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [authMode, setAuthMode] = useState('login');
   const [showDashboardModal, setShowDashboardModal] = useState(false);
   const [showGoProPageModal, setShowGoProPageModal] = useState(false);
-  
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // User profile for dashboard
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState(null);
+  // Fetch user profile for dashboard
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      setProfileLoading(true);
+      setProfileError(null);
+      const token = await authService.getToken();
+      if (!token) {
+        setProfileError('Authentication required. Please login again.');
+        setUserProfile(null);
+        return;
+      }
+      const { authAPI } = await import('./services/api');
+      authAPI.setToken(token);
+      const profile = await authAPI.getProfile();
+      setUserProfile(profile);
+    } catch (err) {
+      setUserProfile(null);
+      if (err.message && (err.message.includes('403') || err.message.includes('Not authenticated'))) {
+        setProfileError('Session expired. Please login again.');
+      } else {
+        setProfileError('Failed to load user data');
+      }
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     checkAuthStatus();
@@ -81,6 +108,7 @@ export default function App() {
 
   const openDashboardModal = () => {
     if (isAuthenticated) {
+      fetchUserProfile();
       setShowDashboardModal(true);
     } else {
       openAuthModal('login');
@@ -203,7 +231,8 @@ export default function App() {
     setIsAuthenticated(false);
     setUser(null);
     setShowDashboardModal(false);
-    Alert.alert('Success', 'Logged out successfully');
+    setAuthMode('login');
+  setShowAuthModal(true);
   };
 
   const openProfileModal = () => {
@@ -234,6 +263,7 @@ export default function App() {
         <MainContent 
           isAuthenticated={isAuthenticated}
           user={user}
+          refreshDashboard={fetchUserProfile}
         />
 
         {/* Auth Modal */}
@@ -258,6 +288,10 @@ export default function App() {
           user={user}
           onUpgrade={openGoProModal}
           onLogout={handleLogout}
+          userProfile={userProfile}
+          loading={profileLoading}
+          error={profileError}
+          refreshUserProfile={fetchUserProfile}
         />
 
         {/* Go Pro Modal */}

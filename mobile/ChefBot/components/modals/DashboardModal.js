@@ -1,85 +1,40 @@
-import React, { useState, useEffect } from 'react';
+
+import React from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { styles } from '../../styles/AppStyles';
 import { upgradeIconSvg } from '../../assets/svgIcons';
-import { authAPI } from '../../services/api';
-import { authService } from '../../services/auth';
 
-export const DashboardModal = ({ 
-  visible, 
-  onClose, 
-  user, 
-  onUpgrade, 
-  onLogout 
+export const DashboardModal = ({
+  visible,
+  onClose,
+  user,
+  onUpgrade,
+  onLogout,
+  userProfile,
+  loading,
+  error,
+  refreshUserProfile
 }) => {
-  const [userProfile, setUserProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Fetch user profile data when modal opens
-  useEffect(() => {
-    if (visible && user) {
-      fetchUserProfile();
-    }
-  }, [visible, user]);
-
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Ensure we have a valid token before making the request
-      const token = await authService.getToken();
-      if (!token) {
-        setError('Authentication required. Please login again.');
-        return;
-      }
-      
-      // Set the token in the API service (in case it wasn't set)
-      authAPI.setToken(token);
-      
-      // Fetch fresh profile data
-      const profile = await authAPI.getProfile();
-      setUserProfile(profile);
-    } catch (err) {
-      console.error('Error fetching user profile:', err);
-      if (err.message.includes('403') || err.message.includes('Not authenticated')) {
-        setError('Session expired. Please login again.');
-      } else {
-        setError('Failed to load user data');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Calculate statistics based on real API data
   const getStats = () => {
     if (!userProfile) return null;
-
     const userTier = userProfile.plan === 'plus' ? 'pro' : 'free';
-    const monthlyUsage = userProfile.monthly_usage || 0;
-    const monthlyLimit = userProfile.monthly_limit || 10;
-
+    // Prefer recipes_left if present (backend now provides it for free users)
     if (userTier === 'free') {
-      // For free users: show monthly recipes left
-      const monthlyRecipesLeft = Math.max(0, monthlyLimit - monthlyUsage);
-      
       return {
-        monthlyRecipesLeft,
+        monthlyRecipesLeft: userProfile.recipes_left ?? 0,
         tier: 'free'
       };
     } else {
-      // For pro users: show monthly and total stats
       return {
-        monthlyRecipes: monthlyUsage,
-        totalRecipes: userProfile.total_recipes || 0, // This would need to be added to API
+        monthlyRecipes: userProfile.monthly_usage || 0,
+        totalRecipes: userProfile.total_recipes || 0,
         tier: 'pro'
       };
     }
   };
-
   const stats = getStats();
   const userTier = userProfile?.plan === 'plus' ? 'pro' : 'free';
 
@@ -115,14 +70,14 @@ export const DashboardModal = ({
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity onPress={fetchUserProfile} style={styles.retryButton}>
+              <TouchableOpacity onPress={refreshUserProfile} style={styles.retryButton}>
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
-              {error.includes('login again') && (
+              {error && error.includes('login again') && (
                 <TouchableOpacity 
                   onPress={() => {
                     onClose();
-                    onLogout(); // This will log the user out and show login screen
+                    onLogout();
                   }} 
                   style={[styles.retryButton, { backgroundColor: '#FF8A80', marginTop: 8 }]}
                 >

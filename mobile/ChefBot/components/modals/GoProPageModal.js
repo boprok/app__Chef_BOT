@@ -21,7 +21,7 @@ export const GoProPageModal = ({ visible, onClose }) => {
             
             <Text style={styles.goProPageTitle}>Upgrade to Chef Bot PRO</Text>
             <Text style={styles.goProPageSubtitle}>
-              Unlock unlimited recipes, premium features, and personalized meal planning
+              Unlock unlimited recipes, fast requests and recipes history
             </Text>
             
             <View style={styles.pricingCard}>
