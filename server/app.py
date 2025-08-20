@@ -146,46 +146,54 @@ def _current_month() -> str:
 
 async def check_and_update_usage(user: dict) -> bool:
     """Check if user can make analysis and update usage. Returns True if allowed."""
-    log_debug(f"check_and_update_usage: user_id={user['id']} usage={user.get('monthly_usage')} month={user.get('usage_month')} plan={user.get('plan')}")
-    
     if user["plan"] == "plus":
         return True
-    
-    current_month = _current_month()
-    
-    # Reset usage if new month
-    if user.get("usage_month") != current_month:
+
+    # Use used_free_analyses for usage tracking
+    used = user.get("used_free_analyses")
+    if used is None:
+        used = 0
+    log_debug(f"check_and_update_usage: user_id={user['id']} used_free_analyses={used} plan={user.get('plan')}")
+
+    # --- Monthly reset logic ---
+    from datetime import datetime
+    now = datetime.utcnow()
+    current_month = f"{now.year}-{now.month:02d}"
+    user_month = user.get("usage_month")
+    if user_month != current_month:
+        log_debug(f"Resetting used_free_analyses for user_id={user['id']} (was {used}) for new month {current_month}")
+        used = 0
         async with httpx.AsyncClient() as client:
-            update_data = {"monthly_usage": 0, "usage_month": current_month}
+            update_data = {"used_free_analyses": 0, "usage_month": current_month}
             response = await client.patch(
                 f"{SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
                 headers=SUPABASE_HEADERS,
                 json=update_data
             )
             if response.status_code not in [200, 204]:
+                log_debug(f"Failed to reset used_free_analyses for user_id={user['id']}")
                 return False
-                
-        user["monthly_usage"] = 0
+        user["used_free_analyses"] = 0
         user["usage_month"] = current_month
-    
-    # Check limit
-    if user.get("monthly_usage", 0) >= FREE_MAX_MONTHLY:
-        log_debug(f"LIMIT REACHED: user_id={user['id']} usage={user.get('monthly_usage')} limit={FREE_MAX_MONTHLY}")
+    # --- End monthly reset logic ---
+
+    if used >= FREE_MAX_MONTHLY:
+        log_debug(f"LIMIT REACHED: user_id={user['id']} used_free_analyses={used} limit={FREE_MAX_MONTHLY}")
         return False
-    
+
     # Increment usage
     async with httpx.AsyncClient() as client:
-        new_usage = user.get("monthly_usage", 0) + 1
-        update_data = {"monthly_usage": new_usage}
+        new_usage = used + 1
+        update_data = {"used_free_analyses": new_usage}
         response = await client.patch(
             f"{SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
             headers=SUPABASE_HEADERS,
             json=update_data
         )
         if response.status_code not in [200, 204]:
+            log_debug(f"Failed to update used_free_analyses for user_id={user['id']}")
             return False
-    
-    log_debug(f"USAGE ALLOWED: user_id={user['id']} new_usage={user.get('monthly_usage', 0) + 1}")
+    log_debug(f"USAGE ALLOWED: user_id={user['id']} new_used_free_analyses={new_usage}")
     return True
 
 @app.post("/api/auth/signup", response_model=AuthResponse)
