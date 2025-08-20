@@ -153,10 +153,6 @@ async def check_and_update_usage(user: dict) -> bool:
     used = user.get("used_free_analyses")
     if used is None:
         used = 0
-    try:
-        used = int(used)
-    except Exception:
-        used = 0
     log_debug(f"check_and_update_usage: user_id={user['id']} used_free_analyses={used} plan={user.get('plan')}")
 
     # --- Monthly reset logic ---
@@ -285,10 +281,6 @@ async def get_current_user_profile(user: dict = Depends(get_current_user)):
     recipes_left = None
     if user["plan"] == "free":
         used = user.get("used_free_analyses", 0)
-        try:
-            used = int(used)
-        except Exception:
-            used = 0
         recipes_left = FREE_MAX_MONTHLY - used
     return {
         "id": user["id"],
