@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS rate_limits (
     user_id UUID NOT NULL,
     hour_key TEXT NOT NULL, -- Format: YYYY-MM-DD-HH
     request_count INTEGER DEFAULT 0,
-    plan TEXT DEFAULT 'free', -- 'free' or 'plus'
+    plan TEXT DEFAULT 'free', -- 'free' or 'pro'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

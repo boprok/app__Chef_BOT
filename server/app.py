@@ -146,7 +146,7 @@ def _current_hour() -> str:
 async def check_rate_limit(user: dict) -> bool:
     """Check if user has exceeded their hourly rate limit. Returns True if allowed."""
     # Determine rate limit based on user plan
-    if user["plan"] == "plus":
+    if user["plan"] == "pro":
         hourly_limit = RATE_LIMIT_PRO_PER_HOUR
     else:
         hourly_limit = RATE_LIMIT_FREE_PER_HOUR
@@ -229,7 +229,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 async def check_and_update_usage(user: dict) -> bool:
     """Check if user can make analysis and update usage. Returns True if allowed."""
-    if user["plan"] == "plus":
+    if user["plan"] == "pro":
         return True
 
     used = user.get("used_free_analyses")
@@ -433,7 +433,7 @@ async def get_current_user_profile(user: dict = Depends(get_current_user)):
         "email": user["email"],
         "plan": user["plan"],
         "recipes_left": recipes_left,
-        "monthly_limit": None if user["plan"] == "plus" else FREE_MAX_MONTHLY,
+        "monthly_limit": None if user["plan"] == "pro" else FREE_MAX_MONTHLY,
         "usage_month": user["usage_month"],
         "created_at": user["created_at"]
     }
@@ -464,12 +464,12 @@ async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: di
         log_debug(f"RAISING 429 for user_id={user['id']}")
         raise HTTPException(
             status_code=429, 
-            detail=f"Free plan limit reached: {FREE_MAX_MONTHLY} analyses this month. Upgrade to Plus for unlimited usage."
+            detail=f"Free plan limit reached: {FREE_MAX_MONTHLY} analyses this month. Upgrade to Pro for unlimited usage."
         )
 
     # Check rate limiting (requests per hour)
     if not await check_rate_limit(user):
-        rate_limit = RATE_LIMIT_PRO_PER_HOUR if user["plan"] == "plus" else RATE_LIMIT_FREE_PER_HOUR
+        rate_limit = RATE_LIMIT_PRO_PER_HOUR if user["plan"] == "pro" else RATE_LIMIT_FREE_PER_HOUR
         log_debug(f"RATE LIMIT EXCEEDED for user_id={user['id']} plan={user['plan']}")
         raise HTTPException(
             status_code=429,
@@ -477,7 +477,7 @@ async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: di
         )
 
     # Add small delay for free tier
-    if user["plan"] != "plus":
+    if user["plan"] != "pro":
         await asyncio.sleep(FREE_DELAY_SECONDS)
 
     provider = _choose_provider()

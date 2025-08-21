@@ -698,4 +698,138 @@ export const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
+
+  // Recipes Page Styles
+  recipesPageContent: {
+    flex: 1,
+    padding: 20,
+  },
+  recipesPageTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  recipesPageSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginBottom: 20,
+  },
+  recipesScrollView: {
+    flex: 1,
+    marginBottom: 20,
+  },
+  recipesScrollContent: {
+    paddingHorizontal: 10,
+    gap: 16,
+  },
+  recipeCard: {
+    width: 260,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  recipeImageContainer: {
+    marginBottom: 12,
+  },
+  recipeImagePlaceholder: {
+    height: 120,
+    backgroundColor: colors.border,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recipeImageText: {
+    fontSize: 40,
+  },
+  recipeInfo: {
+    flex: 1,
+  },
+  recipeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  recipeMetadata: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recipeTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recipeTimeIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  recipeTimeText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  recipeDifficultyContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recipeDifficultyText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  recipeIngredientsPreview: {
+    marginBottom: 12,
+  },
+  recipeIngredientsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  recipeIngredientsText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  recipeStepsPreview: {
+    marginBottom: 8,
+  },
+  recipeStepsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  recipeStepsText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  reportProblemButton: {
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reportProblemText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
 });

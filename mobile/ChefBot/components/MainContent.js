@@ -7,11 +7,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { recipeAPI } from '../services/api';
 import { LimitReachedModal } from './modals/LimitReachedModal';
 import { GoProPageModal } from './modals/GoProPageModal';
-import { IngredientsPage } from './IngredientsPage';
+import { RecipesPage } from './RecipesPage';
 
 export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
   // Navigation state
-  const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'ingredients'
+  const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'recipes'
   const [analysisResult, setAnalysisResult] = useState(null);
   
   // Handler for Analyze button
@@ -29,9 +29,9 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
         refreshDashboard();
       }
       
-      // Store the analysis result and navigate to ingredients page
+      // Store the analysis result and navigate to recipes page
       setAnalysisResult(result);
-      setCurrentPage('ingredients');
+      setCurrentPage('recipes');
     } catch (error) {
       if (error.message && error.message.includes('429')) {
         if (error.message.includes('Rate limit exceeded')) {
@@ -151,13 +151,11 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
     setPreference('');
   };
 
-  // Show ingredients page if we have analysis results
-  if (currentPage === 'ingredients' && analysisResult) {
+  // Show recipes page if we have analysis results
+  if (currentPage === 'recipes' && analysisResult) {
     return (
-      <IngredientsPage
-        ingredients={analysisResult.ingredients || []}
-        onIngredientsChange={handleIngredientsChange}
-        onGenerateRecipes={handleGenerateRecipes}
+      <RecipesPage
+        recipes={analysisResult.recipes || []}
         onBack={handleBackToMain}
       />
     );

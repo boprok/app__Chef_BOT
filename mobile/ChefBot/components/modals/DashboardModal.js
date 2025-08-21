@@ -20,7 +20,7 @@ export const DashboardModal = ({
   // Calculate statistics based on real API data
   const getStats = () => {
     if (!userProfile) return null;
-    const userTier = userProfile.plan === 'plus' ? 'pro' : 'free';
+    const userTier = userProfile.plan === 'pro' ? 'pro' : 'free';
     // Prefer recipes_left if present (backend now provides it for free users)
     if (userTier === 'free') {
       return {
@@ -36,7 +36,7 @@ export const DashboardModal = ({
     }
   };
   const stats = getStats();
-  const userTier = userProfile?.plan === 'plus' ? 'pro' : 'free';
+  const userTier = userProfile?.plan === 'pro' ? 'pro' : 'free';
 
   return (
     <Modal
