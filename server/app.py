@@ -21,24 +21,58 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 # Environment variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 PROVIDER = os.getenv("PROVIDER", "auto").lower()
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-this")
-FREE_MAX_MONTHLY = int(os.getenv("FREE_MAX_MONTHLY", "10"))
-FREE_DELAY_SECONDS = float(os.getenv("FREE_DELAY_SECONDS", "1.5"))
+JWT_SECRET = os.getenv("JWT_SECRET")
+FREE_MAX_MONTHLY = int(os.getenv("FREE_MAX_MONTHLY"))
+FREE_DELAY_SECONDS = float(os.getenv("FREE_DELAY_SECONDS"))
 
 # Rate limiting configuration
-RATE_LIMIT_FREE_PER_HOUR = int(os.getenv("RATE_LIMIT_FREE_PER_HOUR", "3"))
-RATE_LIMIT_PRO_PER_HOUR = int(os.getenv("RATE_LIMIT_PRO_PER_HOUR", "7"))
+RATE_LIMIT_FREE_PER_HOUR = int(os.getenv("RATE_LIMIT_FREE_PER_HOUR"))
+RATE_LIMIT_PRO_PER_HOUR = int(os.getenv("RATE_LIMIT_PRO_PER_HOUR"))
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+# Validate required environment variables
+REQUIRED_ENV_VARS = {
+    "GEMINI_API_KEY": GEMINI_API_KEY,
+    "GEMINI_MODEL": GEMINI_MODEL,
+    "JWT_SECRET": JWT_SECRET,
+    "FREE_MAX_MONTHLY": FREE_MAX_MONTHLY,
+    "FREE_DELAY_SECONDS": FREE_DELAY_SECONDS,
+    "RATE_LIMIT_FREE_PER_HOUR": RATE_LIMIT_FREE_PER_HOUR,
+    "RATE_LIMIT_PRO_PER_HOUR": RATE_LIMIT_PRO_PER_HOUR,
+    "SUPABASE_URL": SUPABASE_URL,
+    "SUPABASE_SERVICE_KEY": SUPABASE_SERVICE_KEY,
+}
+
+missing_vars = [var for var, value in REQUIRED_ENV_VARS.items() if value is None]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
 SUPABASE_HEADERS = {
     'apikey': SUPABASE_SERVICE_KEY,
     'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
     'Content-Type': 'application/json'
 }
+
+# Validate environment on startup
+def validate_environment():
+    """Validate that all required environment variables are properly configured"""
+    print("🔧 Validating environment configuration...")
+    print(f"✅ GEMINI_API_KEY: {'Set' if GEMINI_API_KEY else '❌ Missing'}")
+    print(f"✅ GEMINI_MODEL: {GEMINI_MODEL}")
+    print(f"✅ JWT_SECRET: {'Set' if JWT_SECRET else '❌ Missing'}")
+    print(f"✅ FREE_MAX_MONTHLY: {FREE_MAX_MONTHLY}")
+    print(f"✅ RATE_LIMIT_FREE_PER_HOUR: {RATE_LIMIT_FREE_PER_HOUR}")
+    print(f"✅ RATE_LIMIT_PRO_PER_HOUR: {RATE_LIMIT_PRO_PER_HOUR}")
+    print(f"✅ SUPABASE_URL: {'Set' if SUPABASE_URL else '❌ Missing'}")
+    print(f"✅ SUPABASE_SERVICE_KEY: {'Set' if SUPABASE_SERVICE_KEY else '❌ Missing'}")
+    print("🚀 Environment validation complete!")
+
+validate_environment()
 
 # AI System prompt
 SYSTEM_PROMPT = (
@@ -111,6 +145,19 @@ class HealthResponse(BaseModel):
 def log_debug(msg):
     print(msg)
     sys.stdout.flush()
+
+def validate_environment():
+    """Validate that all required environment variables are properly configured"""
+    print("🔧 Validating environment configuration...")
+    print(f"✅ GEMINI_API_KEY: {'Set' if GEMINI_API_KEY else '❌ Missing'}")
+    print(f"✅ GEMINI_MODEL: {GEMINI_MODEL}")
+    print(f"✅ JWT_SECRET: {'Set' if JWT_SECRET else '❌ Missing'}")
+    print(f"✅ FREE_MAX_MONTHLY: {FREE_MAX_MONTHLY}")
+    print(f"✅ RATE_LIMIT_FREE_PER_HOUR: {RATE_LIMIT_FREE_PER_HOUR}")
+    print(f"✅ RATE_LIMIT_PRO_PER_HOUR: {RATE_LIMIT_PRO_PER_HOUR}")
+    print(f"✅ SUPABASE_URL: {'Set' if SUPABASE_URL else '❌ Missing'}")
+    print(f"✅ SUPABASE_SERVICE_KEY: {'Set' if SUPABASE_SERVICE_KEY else '❌ Missing'}")
+    print("🚀 Environment validation complete!")
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
