@@ -27,6 +27,10 @@ JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-this")
 FREE_MAX_MONTHLY = int(os.getenv("FREE_MAX_MONTHLY", "10"))
 FREE_DELAY_SECONDS = float(os.getenv("FREE_DELAY_SECONDS", "1.5"))
 
+# Rate limiting configuration
+RATE_LIMIT_FREE_PER_HOUR = int(os.getenv("RATE_LIMIT_FREE_PER_HOUR", "3"))
+RATE_LIMIT_PRO_PER_HOUR = int(os.getenv("RATE_LIMIT_PRO_PER_HOUR", "7"))
+
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
@@ -38,7 +42,8 @@ SUPABASE_HEADERS = {
 
 # AI System prompt
 SYSTEM_PROMPT = (
-    "You are a helpful chef. Given an image of a fridge and optional user preferences, "
+    "You are a helpful chef. Given an image of a fridge, a pantry or just some ingredients "
+    "and optional user preferences, "
     "list ingredients you see and propose 3 concise recipes using mostly those ingredients. "
     "Prefer short prep times and minimal extra pantry items. Return strictly JSON with keys: "
     "ingredients (string[]) and recipes (array of {title, ingredients, steps, timeMins})."
@@ -132,6 +137,80 @@ def _choose_provider() -> str:
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="AI service not configured. Please check server configuration.")
     return "gemini"
+
+def _current_hour() -> str:
+    """Get current hour in format YYYY-MM-DD-HH for rate limiting"""
+    now = datetime.utcnow()
+    return f"{now.year}-{now.month:02d}-{now.day:02d}-{now.hour:02d}"
+
+async def check_rate_limit(user: dict) -> bool:
+    """Check if user has exceeded their hourly rate limit. Returns True if allowed."""
+    # Determine rate limit based on user plan
+    if user["plan"] == "plus":
+        hourly_limit = RATE_LIMIT_PRO_PER_HOUR
+    else:
+        hourly_limit = RATE_LIMIT_FREE_PER_HOUR
+    
+    current_hour = _current_hour()
+    user_id = user["id"]
+    
+    # Get current hourly usage from database
+    async with httpx.AsyncClient() as client:
+        # Check if we have a rate limit record for this user and hour
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/rate_limits?user_id=eq.{user_id}&hour_key=eq.{current_hour}",
+            headers=SUPABASE_HEADERS
+        )
+        
+        if response.status_code != 200:
+            log_debug(f"Failed to fetch rate limit data for user_id={user_id}")
+            return True  # Allow on error to avoid blocking users
+        
+        rate_records = response.json()
+        
+        if not rate_records:
+            # No record exists, create one
+            new_record = {
+                "user_id": user_id,
+                "hour_key": current_hour,
+                "request_count": 1,
+                "plan": user["plan"]
+            }
+            
+            create_response = await client.post(
+                f"{SUPABASE_URL}/rest/v1/rate_limits",
+                headers=SUPABASE_HEADERS,
+                json=new_record
+            )
+            
+            if create_response.status_code not in [200, 201]:
+                log_debug(f"Failed to create rate limit record for user_id={user_id}")
+                return True  # Allow on error
+            
+            log_debug(f"RATE LIMIT: Created new record for user_id={user_id}, count=1, limit={hourly_limit}")
+            return True
+        
+        # Record exists, check current count
+        current_count = rate_records[0]["request_count"]
+        
+        if current_count >= hourly_limit:
+            log_debug(f"RATE LIMIT EXCEEDED: user_id={user_id} count={current_count} limit={hourly_limit}")
+            return False
+        
+        # Increment the count
+        new_count = current_count + 1
+        update_response = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/rate_limits?user_id=eq.{user_id}&hour_key=eq.{current_hour}",
+            headers=SUPABASE_HEADERS,
+            json={"request_count": new_count}
+        )
+        
+        if update_response.status_code not in [200, 204]:
+            log_debug(f"Failed to update rate limit count for user_id={user_id}")
+            return True  # Allow on error
+        
+        log_debug(f"RATE LIMIT: Updated user_id={user_id}, new_count={new_count}, limit={hourly_limit}")
+        return True
 
 # ===== DATABASE RELATED FUNCTIONS =====
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -386,6 +465,15 @@ async def analyze(file: UploadFile = File(...), prompt: str = Form(""), user: di
         raise HTTPException(
             status_code=429, 
             detail=f"Free plan limit reached: {FREE_MAX_MONTHLY} analyses this month. Upgrade to Plus for unlimited usage."
+        )
+
+    # Check rate limiting (requests per hour)
+    if not await check_rate_limit(user):
+        rate_limit = RATE_LIMIT_PRO_PER_HOUR if user["plan"] == "plus" else RATE_LIMIT_FREE_PER_HOUR
+        log_debug(f"RATE LIMIT EXCEEDED for user_id={user['id']} plan={user['plan']}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded: {rate_limit} requests per hour. Please wait before making another request."
         )
 
     # Add small delay for free tier

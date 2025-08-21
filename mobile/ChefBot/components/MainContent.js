@@ -7,8 +7,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { recipeAPI } from '../services/api';
 import { LimitReachedModal } from './modals/LimitReachedModal';
 import { GoProPageModal } from './modals/GoProPageModal';
+import { IngredientsPage } from './IngredientsPage';
 
 export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
+  // Navigation state
+  const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'ingredients'
+  const [analysisResult, setAnalysisResult] = useState(null);
+  
   // Handler for Analyze button
   const [analyzing, setAnalyzing] = useState(false);
   const [limitModalVisible, setLimitModalVisible] = useState(false);
@@ -23,10 +28,29 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
       if (typeof refreshDashboard === 'function') {
         refreshDashboard();
       }
-      Alert.alert('Analysis Result', result?.result || 'Success!');
+      
+      // Store the analysis result and navigate to ingredients page
+      setAnalysisResult(result);
+      setCurrentPage('ingredients');
     } catch (error) {
-      if (error.message && error.message.includes('429') && error.message.includes('limit')) {
-        setLimitModalVisible(true);
+      if (error.message && error.message.includes('429')) {
+        if (error.message.includes('Rate limit exceeded')) {
+          // Rate limiting error - show specific message
+          Alert.alert(
+            'Too Many Requests', 
+            error.message + '\n\nTip: Upgrade to PRO for higher rate limits!',
+            [
+              { text: 'OK', style: 'default' },
+              { text: 'Upgrade', onPress: () => setGoProModalVisible(true), style: 'default' }
+            ]
+          );
+        } else if (error.message.includes('Free plan limit')) {
+          // Monthly limit reached - show upgrade modal
+          setLimitModalVisible(true);
+        } else {
+          // Generic 429 error
+          Alert.alert('Limit Reached', error.message || 'Request limit exceeded. Please try again later.');
+        }
       } else {
         Alert.alert('Error', error.message || 'Failed to analyze image.');
       }
@@ -34,6 +58,7 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
       setAnalyzing(false);
     }
   };
+  
   // Function to open camera and set selected image
   const openCamera = async () => {
     try {
@@ -100,6 +125,43 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
       ]
     );
   };
+
+  // Ingredients page handlers
+  const handleIngredientsChange = (updatedIngredients) => {
+    if (analysisResult) {
+      setAnalysisResult({
+        ...analysisResult,
+        ingredients: updatedIngredients
+      });
+    }
+  };
+
+  const handleGenerateRecipes = (ingredients) => {
+    // For now, just show an alert with the recipes
+    if (analysisResult && analysisResult.recipes) {
+      const recipeTitles = analysisResult.recipes.map(recipe => recipe.title).join('\n');
+      Alert.alert('Generated Recipes', recipeTitles || 'No recipes found');
+    }
+  };
+
+  const handleBackToMain = () => {
+    setCurrentPage('main');
+    setAnalysisResult(null);
+    setSelectedImage(null);
+    setPreference('');
+  };
+
+  // Show ingredients page if we have analysis results
+  if (currentPage === 'ingredients' && analysisResult) {
+    return (
+      <IngredientsPage
+        ingredients={analysisResult.ingredients || []}
+        onIngredientsChange={handleIngredientsChange}
+        onGenerateRecipes={handleGenerateRecipes}
+        onBack={handleBackToMain}
+      />
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#181818' }}>
