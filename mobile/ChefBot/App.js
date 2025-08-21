@@ -36,6 +36,9 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
+  // Current page state
+  const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'recipes'
+  
   // Fetch user profile for dashboard
   const fetchUserProfile = useCallback(async () => {
     try {
@@ -254,17 +257,22 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <StatusBar style="light" />
         
-        <Header 
-          isAuthenticated={isAuthenticated}
-          onLoginPress={() => openAuthModal('login')}
-          onProfilePress={openProfileModal}
-          onGoProPress={openGoProModal}
-        />
+        {/* Only show header on main page */}
+        {currentPage === 'main' && (
+          <Header 
+            isAuthenticated={isAuthenticated}
+            onLoginPress={() => openAuthModal('login')}
+            onProfilePress={openProfileModal}
+            onGoProPress={openGoProModal}
+          />
+        )}
         
         <MainContent 
           isAuthenticated={isAuthenticated}
           user={user}
           refreshDashboard={fetchUserProfile}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
         />
 
         {/* Auth Modal */}

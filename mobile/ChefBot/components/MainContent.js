@@ -9,9 +9,9 @@ import { LimitReachedModal } from './modals/LimitReachedModal';
 import { GoProPageModal } from './modals/GoProPageModal';
 import { RecipesPage } from './RecipesPage';
 
-export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
-  // Navigation state
-  const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'recipes'
+export const MainContent = ({ isAuthenticated, user, refreshDashboard, currentPage, setCurrentPage }) => {
+  // Navigation state - now managed by parent App.js
+  // const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'recipes'
   const [analysisResult, setAnalysisResult] = useState(null);
   
   // Handler for Analyze button
@@ -24,6 +24,7 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
     setAnalyzing(true);
     try {
       const result = await recipeAPI.analyzeImage(selectedImage, preference);
+      
       // Refresh dashboard stats after successful analysis
       if (typeof refreshDashboard === 'function') {
         refreshDashboard();
@@ -156,6 +157,7 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard }) => {
     return (
       <RecipesPage
         recipes={analysisResult.recipes || []}
+        analysisResult={analysisResult}
         onBack={handleBackToMain}
       />
     );
