@@ -264,7 +264,7 @@ async def create_user_session(user_id: str, device_id: str, device_info: dict, r
         
         return response.json()
 
-async def invalidate_user_session(user_id: int, refresh_token: str):
+async def invalidate_user_session(user_id: str, refresh_token: str):
     """Invalidate a specific user session"""
     try:
         # Hash the refresh token for database lookup
@@ -280,7 +280,7 @@ async def invalidate_user_session(user_id: int, refresh_token: str):
         logger.error(f"Error invalidating session: {str(e)}")
         # Don't raise exception - logout should succeed even if session cleanup fails
 
-async def validate_user_session(user_id: int, refresh_token: str) -> dict:
+async def validate_user_session(user_id: str, refresh_token: str) -> dict:
     """Validate if user session is active and return session info"""
     try:
         # Hash the refresh token for database lookup
