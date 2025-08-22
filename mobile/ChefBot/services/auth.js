@@ -1,15 +1,53 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from './api';
+import { Platform } from 'react-native';
+import * as Application from 'expo-application';
 
 const TOKEN_KEY = 'chef_bot_token';
+const REFRESH_TOKEN_KEY = 'chef_bot_refresh_token';
 const USER_KEY = 'chef_bot_user';
+const TOKEN_EXPIRY_KEY = 'chef_bot_token_expiry';
+const DEVICE_ID_KEY = 'chef_bot_device_id';
+
+// Generate or get device ID
+const getDeviceId = async () => {
+  try {
+    // Try to get stored device ID first
+    let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    
+    if (!deviceId) {
+      // Generate new device ID using available identifiers
+      const applicationId = Application.applicationId || 'unknown-app';
+      const installationId = await Application.getInstallationTimeAsync();
+      const platform = Platform.OS;
+      const timestamp = Date.now();
+      
+      deviceId = `${platform}-${applicationId}-${installationId}-${timestamp}`;
+      await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    
+    return deviceId;
+  } catch (error) {
+    console.error('Failed to get/generate device ID:', error);
+    // Fallback to timestamp-based ID
+    const fallbackId = `${Platform.OS}-fallback-${Date.now()}`;
+    return fallbackId;
+  }
+};
 
 export const authService = {
-  // Login and store token
+  // Login and store tokens
   async login(email, password) {
     try {
-      const response = await authAPI.login(email, password);
-      await AsyncStorage.setItem(TOKEN_KEY, response.token);
+      const deviceId = await getDeviceId();
+      const deviceInfo = {
+        device_id: deviceId,
+        device_name: `${Platform.OS} Device`,
+        platform: Platform.OS
+      };
+      
+      const response = await authAPI.secureLogin(email, password, deviceInfo);
+      await this.storeTokens(response.token, response.refresh_token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
       authAPI.setToken(response.token);
       return response;
@@ -19,11 +57,11 @@ export const authService = {
     }
   },
 
-  // Signup and store token
+  // Signup and store tokens
   async signup(email, password) {
     try {
       const response = await authAPI.signup(email, password);
-      await AsyncStorage.setItem(TOKEN_KEY, response.token);
+      await this.storeTokens(response.token, response.refresh_token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
       authAPI.setToken(response.token);
       return response;
@@ -33,10 +71,96 @@ export const authService = {
     }
   },
 
+  // Store tokens with expiry calculation
+  async storeTokens(accessToken, refreshToken) {
+    try {
+      // Calculate expiry time (24 hours from now)
+      const expiryTime = Date.now() + (24 * 60 * 60 * 1000);
+      
+      await AsyncStorage.setItem(TOKEN_KEY, accessToken);
+      if (refreshToken) {
+        await AsyncStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      }
+      await AsyncStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
+    } catch (error) {
+      console.error('Failed to store tokens:', error);
+      throw error;
+    }
+  },
+
+  // Check if token is expired
+  async isTokenExpired() {
+    try {
+      const expiryTime = await AsyncStorage.getItem(TOKEN_EXPIRY_KEY);
+      if (!expiryTime) return true;
+      
+      return Date.now() > parseInt(expiryTime);
+    } catch (error) {
+      console.error('Failed to check token expiry:', error);
+      return true;
+    }
+  },
+
+  // Refresh access token
+  async refreshAccessToken() {
+    try {
+      const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await authAPI.refreshToken(refreshToken);
+      await this.storeTokens(response.token, response.refresh_token);
+      authAPI.setToken(response.token);
+      
+      return response.token;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      // If refresh fails, logout user
+      await this.logout();
+      throw error;
+    }
+  },
+
+  // Get valid token (refresh if needed)
+  async getValidToken() {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!token) return null;
+
+      const isExpired = await this.isTokenExpired();
+      if (isExpired) {
+        console.log('Token expired, attempting refresh...');
+        return await this.refreshAccessToken();
+      }
+
+      return token;
+    } catch (error) {
+      console.error('Failed to get valid token:', error);
+      return null;
+    }
+  },
+
   // Logout and clear storage
   async logout() {
     try {
+      // Get refresh token before clearing storage
+      const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+      
+      // Call server logout endpoint if we have a refresh token
+      if (refreshToken) {
+        try {
+          await authAPI.logout(refreshToken);
+        } catch (error) {
+          // Don't fail logout if server call fails
+          console.warn('Server logout failed, proceeding with local logout:', error);
+        }
+      }
+      
+      // Clear local storage
       await AsyncStorage.removeItem(TOKEN_KEY);
+      await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
+      await AsyncStorage.removeItem(TOKEN_EXPIRY_KEY);
       await AsyncStorage.removeItem(USER_KEY);
       authAPI.setToken(null);
     } catch (error) {
@@ -44,7 +168,7 @@ export const authService = {
     }
   },
 
-  // Get stored token
+  // Get stored token (use getValidToken instead for automatic refresh)
   async getToken() {
     try {
       return await AsyncStorage.getItem(TOKEN_KEY);
@@ -67,14 +191,14 @@ export const authService = {
 
   // Check if user is authenticated
   async isAuthenticated() {
-    const token = await this.getToken();
+    const token = await this.getValidToken();
     return !!token;
   },
 
   // Initialize auth state (call on app start)
   async initializeAuth() {
     try {
-      const token = await this.getToken();
+      const token = await this.getValidToken();
       if (token) {
         authAPI.setToken(token);
         return true;

@@ -9,10 +9,19 @@ import { LimitReachedModal } from './modals/LimitReachedModal';
 import { GoProPageModal } from './modals/GoProPageModal';
 import { RecipesPage } from './RecipesPage';
 
-export const MainContent = ({ isAuthenticated, user, refreshDashboard, currentPage, setCurrentPage }) => {
+export const MainContent = ({ 
+  isAuthenticated, 
+  user, 
+  refreshDashboard, 
+  currentPage, 
+  setCurrentPage,
+  recipes,
+  setRecipes,
+  analysisResult,
+  setAnalysisResult
+}) => {
   // Navigation state - now managed by parent App.js
-  // const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'recipes'
-  const [analysisResult, setAnalysisResult] = useState(null);
+  // Analysis result state - now managed by parent App.js
   
   // Handler for Analyze button
   const [analyzing, setAnalyzing] = useState(false);
@@ -32,7 +41,12 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard, currentPa
       
       // Store the analysis result and navigate to recipes page
       setAnalysisResult(result);
-      setCurrentPage('recipes');
+      setRecipes(result.recipes || []);
+      
+      // Small delay to ensure smooth transition
+      setTimeout(() => {
+        setCurrentPage('recipes');
+      }, 100);
     } catch (error) {
       if (error.message && error.message.includes('429')) {
         if (error.message.includes('Rate limit exceeded')) {
@@ -148,6 +162,7 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard, currentPa
   const handleBackToMain = () => {
     setCurrentPage('main');
     setAnalysisResult(null);
+    setRecipes([]);
     setSelectedImage(null);
     setPreference('');
   };
@@ -156,7 +171,7 @@ export const MainContent = ({ isAuthenticated, user, refreshDashboard, currentPa
   if (currentPage === 'recipes' && analysisResult) {
     return (
       <RecipesPage
-        recipes={analysisResult.recipes || []}
+        recipes={recipes}
         analysisResult={analysisResult}
         onBack={handleBackToMain}
       />

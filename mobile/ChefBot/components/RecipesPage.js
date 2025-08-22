@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Linking, Alert, Image } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlatGrid } from 'react-native-super-grid';
 import { styles } from '../styles/AppStyles';
 
 export const RecipesPage = ({ recipes, onBack, analysisResult }) => {
-  const insets = useSafeAreaInsets();
 
   const handleReportProblem = () => {
     const subject = 'Chef Bot - Recipe Issue Report';
@@ -109,31 +107,6 @@ export const RecipesPage = ({ recipes, onBack, analysisResult }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#121212' }}>
-      {/* Recipes Header - Fixed spacing and colors */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        paddingHorizontal: 20, 
-        paddingTop: insets.top + 4,
-        paddingBottom: 8, 
-        backgroundColor: '#121212',
-        borderBottomWidth: 1, 
-        borderBottomColor: '#333333' 
-      }}>
-        <TouchableOpacity 
-          style={{ marginRight: 16, padding: 8 }} 
-          onPress={onBack}
-        >
-          <Text style={{ color: '#2ba84a', fontSize: 20, fontWeight: 'bold' }}>←</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: '#2ba84a', fontSize: 20, fontWeight: 'bold' }}>Recipes</Text>
-          <Text style={{ color: '#2ba84a', fontSize: 14, marginTop: 1, opacity: 0.7 }}>
-            {recipes?.length || 0} recipe{recipes?.length !== 1 ? 's' : ''} found
-          </Text>
-        </View>
-      </View>
-
       {/* Content with ScrollView for entire content */}
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View style={{ padding: 20 }}>

@@ -6,7 +6,7 @@ import asyncio
 import uuid
 import hashlib
 import jwt
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
@@ -30,6 +30,12 @@ FREE_DELAY_SECONDS = float(os.getenv("FREE_DELAY_SECONDS"))
 # Rate limiting configuration
 RATE_LIMIT_FREE_PER_HOUR = int(os.getenv("RATE_LIMIT_FREE_PER_HOUR"))
 RATE_LIMIT_PRO_PER_HOUR = int(os.getenv("RATE_LIMIT_PRO_PER_HOUR"))
+
+# Security configuration
+JWT_ACCESS_TOKEN_EXPIRE_HOURS = 24  # Access token expires in 24 hours
+JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7   # Refresh token expires in 7 days
+MAX_LOGIN_ATTEMPTS = 5              # Maximum failed login attempts
+LOCKOUT_DURATION_MINUTES = 15       # Account lockout duration
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -121,9 +127,19 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+    device_id: str
+    device_info: dict = {}
+
 class AuthResponse(BaseModel):
     token: str
+    refresh_token: Optional[str] = None
     user: dict
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 class Recipe(BaseModel):
     title: str
@@ -165,16 +181,157 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     return hash_password(password) == password_hash
 
-def create_token(user_id: str) -> str:
-    payload = {"user_id": user_id, "exp": datetime.utcnow().timestamp() + 86400 * 30}
+def create_token(user_id: str, token_type: str = "access") -> str:
+    """Create JWT token with appropriate expiration time"""
+    if token_type == "access":
+        expire_delta = timedelta(hours=JWT_ACCESS_TOKEN_EXPIRE_HOURS)
+    elif token_type == "refresh":
+        expire_delta = timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    else:
+        raise ValueError("token_type must be 'access' or 'refresh'")
+    
+    expire = datetime.utcnow() + expire_delta
+    payload = {
+        "user_id": user_id,
+        "type": token_type,
+        "exp": int(expire.timestamp()),
+        "iat": int(datetime.utcnow().timestamp())
+    }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
-def verify_token(token: str) -> str:
+def verify_token(token: str, required_type: str = "access") -> str:
+    """Verify JWT token and return user_id"""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        
+        # Check token type
+        if payload.get("type") != required_type:
+            raise HTTPException(status_code=401, detail=f"Invalid token type. Expected {required_type}")
+        
+        # Check if token is expired (JWT library handles this, but we can add custom logic)
+        current_time = datetime.utcnow().timestamp()
+        if payload["exp"] < current_time:
+            raise HTTPException(status_code=401, detail="Token expired")
+            
         return payload["user_id"]
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+def create_token_pair(user_id: str, device_id: str = None) -> dict:
+    """Create both access and refresh tokens"""
+    return {
+        "access_token": create_token(user_id, "access"),
+        "refresh_token": create_token(user_id, "refresh"),
+        "token_type": "bearer",
+        "expires_in": JWT_ACCESS_TOKEN_EXPIRE_HOURS * 3600,  # in seconds
+        "device_id": device_id
+    }
+
+def hash_token(token: str) -> str:
+    """Hash token for secure storage"""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+async def create_user_session(user_id: str, device_id: str, device_info: dict, refresh_token: str) -> dict:
+    """Create a new user session and invalidate previous ones"""
+    async with httpx.AsyncClient() as client:
+        # First, invalidate all existing sessions for this user (one device policy)
+        await client.patch(
+            f"{SUPABASE_URL}/rest/v1/user_sessions?user_id=eq.{user_id}",
+            headers=SUPABASE_HEADERS,
+            json={"is_active": False}
+        )
+        
+        # Create new session
+        session_data = {
+            "user_id": user_id,
+            "device_id": device_id,
+            "device_info": device_info,
+            "token_hash": hash_token(refresh_token),
+            "is_active": True,
+            "expires_at": (datetime.utcnow() + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
+        }
+        
+        response = await client.post(
+            f"{SUPABASE_URL}/rest/v1/user_sessions",
+            headers=SUPABASE_HEADERS,
+            json=session_data
+        )
+        
+        if response.status_code not in [200, 201]:
+            raise HTTPException(status_code=500, detail="Failed to create session")
+        
+        return response.json()
+
+async def invalidate_user_session(user_id: int, refresh_token: str):
+    """Invalidate a specific user session"""
+    try:
+        # Hash the refresh token for database lookup
+        token_hash = hash_token(refresh_token)
+        
+        # Mark session as inactive
+        supabase.table("user_sessions").update({
+            "is_active": False,
+            "last_activity": datetime.utcnow().isoformat()
+        }).eq("user_id", user_id).eq("refresh_token_hash", token_hash).execute()
+        
+    except Exception as e:
+        logger.error(f"Error invalidating session: {str(e)}")
+        # Don't raise exception - logout should succeed even if session cleanup fails
+
+async def validate_user_session(user_id: int, refresh_token: str) -> dict:
+    """Validate if user session is active and return session info"""
+    try:
+        # Hash the refresh token for database lookup
+        token_hash = hash_token(refresh_token)
+        
+        response = supabase.table("user_sessions").select("*").eq("user_id", user_id).eq("refresh_token_hash", token_hash).eq("is_active", True).execute()
+        
+        if response.data:
+            session = response.data[0]
+            # Update last_activity
+            supabase.table("user_sessions").update({
+                "last_activity": datetime.utcnow().isoformat()
+            }).eq("id", session["id"]).execute()
+            
+            return session
+        else:
+            raise HTTPException(status_code=401, detail="Session not found or inactive")
+            
+    except Exception as e:
+        logger.error(f"Error validating user session: {str(e)}")
+        raise HTTPException(status_code=401, detail="Session validation failed")
+
+async def invalidate_user_session(user_id: str, refresh_token: str = None):
+    """Invalidate user session(s)"""
+    async with httpx.AsyncClient() as client:
+        if refresh_token:
+            # Invalidate specific session
+            token_hash = hash_token(refresh_token)
+            await client.patch(
+                f"{SUPABASE_URL}/rest/v1/user_sessions?user_id=eq.{user_id}&token_hash=eq.{token_hash}",
+                headers=SUPABASE_HEADERS,
+                json={"is_active": False}
+            )
+        else:
+            # Invalidate all sessions for user
+            await client.patch(
+                f"{SUPABASE_URL}/rest/v1/user_sessions?user_id=eq.{user_id}",
+                headers=SUPABASE_HEADERS,
+                json={"is_active": False}
+            )
+
+async def update_session_activity(user_id: str, refresh_token: str):
+    """Update last_active timestamp for session"""
+    async with httpx.AsyncClient() as client:
+        token_hash = hash_token(refresh_token)
+        
+        await client.patch(
+            f"{SUPABASE_URL}/rest/v1/user_sessions?user_id=eq.{user_id}&token_hash=eq.{token_hash}&is_active=eq.true",
+            headers=SUPABASE_HEADERS,
+            json={"last_active": datetime.utcnow().isoformat()}
+        )
 
 def _current_month() -> str:
     now = datetime.utcnow()
@@ -424,9 +581,10 @@ async def signup(user_data: UserCreate):
         if response.status_code not in [200, 201]:
             raise HTTPException(status_code=500, detail="Failed to create user")
         
-        token = create_token(user_id)
+        tokens = create_token_pair(user_id)
         return AuthResponse(
-            token=token,
+            token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
             user={"id": user_id, "email": user_data.email, "plan": "free"}
         )
 
@@ -447,10 +605,68 @@ async def login(user_data: UserLogin):
             print(f"LOGIN FAIL: Password mismatch for email={user_data.email}")
             raise HTTPException(status_code=401, detail="Invalid email or password")
         user = users[0]
-        token = create_token(str(user["id"]))
+        tokens = create_token_pair(str(user["id"]))
         return AuthResponse(
-            token=token,
+            token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
             user={"id": str(user["id"]), "email": user["email"], "plan": user["plan"]}
+        )
+
+@app.post("/api/auth/login-secure", response_model=AuthResponse)
+async def login_secure(login_data: LoginRequest):
+    """Secure login with device tracking (one device per user)"""
+    async with httpx.AsyncClient() as client:
+        # Validate user credentials
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/users?email=eq.{login_data.email}",
+            headers=SUPABASE_HEADERS
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Database error")
+        
+        users = response.json()
+        if not users:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        user = users[0]
+        if not verify_password(login_data.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        user_id = str(user["id"])
+        
+        # Check for existing active sessions (enforce one device policy)
+        existing_sessions = await client.get(
+            f"{SUPABASE_URL}/rest/v1/user_sessions?user_id=eq.{user_id}&is_active=eq.true",
+            headers=SUPABASE_HEADERS
+        )
+        
+        if existing_sessions.status_code == 200:
+            active_sessions = existing_sessions.json()
+            if active_sessions:
+                # Check if it's the same device
+                same_device = any(session["device_id"] == login_data.device_id for session in active_sessions)
+                if not same_device:
+                    raise HTTPException(
+                        status_code=409, 
+                        detail="Account is already logged in on another device. Only one device allowed at a time."
+                    )
+        
+        # Create token pair
+        tokens = create_token_pair(user_id, login_data.device_id)
+        
+        # Create/update user session
+        await create_user_session(
+            user_id=user_id,
+            device_id=login_data.device_id,
+            device_info=login_data.device_info,
+            refresh_token=tokens["refresh_token"]
+        )
+        
+        return AuthResponse(
+            token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            user={"id": user_id, "email": user["email"], "plan": user["plan"]}
         )
 
 @app.get("/api/auth/me")
@@ -484,6 +700,72 @@ async def get_current_user_profile(user: dict = Depends(get_current_user)):
         "usage_month": user["usage_month"],
         "created_at": user["created_at"]
     }
+
+@app.post("/api/auth/refresh", response_model=AuthResponse)
+async def refresh_access_token(request: RefreshTokenRequest):
+    """Refresh access token using refresh token with session validation"""
+    try:
+        # Verify refresh token
+        user_id = verify_token(request.refresh_token, required_type="refresh")
+        
+        # Validate session exists and is active
+        session_valid = await validate_user_session(user_id, request.refresh_token)
+        if not session_valid:
+            raise HTTPException(status_code=401, detail="Session not found or expired")
+        
+        # Update session activity
+        await update_session_activity(user_id, request.refresh_token)
+        
+        # Get user data from database
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
+                headers=SUPABASE_HEADERS
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Database error")
+            
+            users = response.json()
+            if not users:
+                raise HTTPException(status_code=401, detail="User not found")
+            
+            user = users[0]
+            
+            # Create new access token (keep same refresh token for now)
+            access_token = create_token(user_id, "access")
+            
+            return AuthResponse(
+                token=access_token,
+                refresh_token=request.refresh_token,  # Keep same refresh token
+                user={"id": str(user["id"]), "email": user["email"], "plan": user["plan"]}
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+@app.post("/api/auth/logout", status_code=status.HTTP_200_OK)
+async def logout(request: LogoutRequest):
+    """Logout user and invalidate session"""
+    try:
+        # Verify refresh token to get user_id
+        user_id = verify_token(request.refresh_token, required_type="refresh")
+        
+        # Invalidate the specific session
+        await invalidate_user_session(user_id, request.refresh_token)
+        
+        return {"message": "Logged out successfully"}
+        
+    except HTTPException:
+        # Even if token is invalid, consider logout successful
+        return {"message": "Logged out successfully"}
+    except Exception as e:
+        return {"message": "Logged out successfully"}
 
 @app.delete("/api/auth/delete", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user: dict = Depends(get_current_user)):

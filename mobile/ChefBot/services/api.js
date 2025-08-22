@@ -107,8 +107,48 @@ class ChefBotAPI {
     });
   }
 
+  async secureLogin(email, password, deviceInfo) {
+    return this.request('/api/auth/secure-login', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        email, 
+        password,
+        device_id: deviceInfo.device_id,
+        device_name: deviceInfo.device_name,
+        platform: deviceInfo.platform
+      }),
+    });
+  }
+
+  async secureLogin(email, password, deviceInfo) {
+    return this.request('/api/auth/secure-login', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        email, 
+        password,
+        device_id: deviceInfo.device_id,
+        device_name: deviceInfo.device_name,
+        platform: deviceInfo.platform
+      }),
+    });
+  }
+
   async getProfile() {
     return this.request('/api/auth/me');
+  }
+
+  async refreshToken(refreshToken) {
+    return this.request('/api/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  }
+
+  async logout(refreshToken) {
+    return this.request('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
   }
 
   // Recipe analysis
@@ -146,8 +186,11 @@ export const api = new ChefBotAPI();
 // Helper functions for easier usage
 export const authAPI = {
   login: (email, password) => api.login(email, password),
+  secureLogin: (email, password, deviceInfo) => api.secureLogin(email, password, deviceInfo),
   signup: (email, password) => api.signup(email, password),
   getProfile: () => api.getProfile(),
+  refreshToken: (refreshToken) => api.refreshToken(refreshToken),
+  logout: (refreshToken) => api.logout(refreshToken),
   setToken: (token) => api.setToken(token),
 };
 

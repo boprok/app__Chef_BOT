@@ -38,6 +38,9 @@ export default function App() {
   const [profileError, setProfileError] = useState(null);
   // Current page state
   const [currentPage, setCurrentPage] = useState('main'); // 'main' or 'recipes'
+  // Recipe analysis results
+  const [recipes, setRecipes] = useState([]);
+  const [analysisResult, setAnalysisResult] = useState(null);
   
   // Fetch user profile for dashboard
   const fetchUserProfile = useCallback(async () => {
@@ -257,15 +260,15 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <StatusBar style="light" />
         
-        {/* Only show header on main page */}
-        {currentPage === 'main' && (
-          <Header 
-            isAuthenticated={isAuthenticated}
-            onLoginPress={() => openAuthModal('login')}
-            onProfilePress={openProfileModal}
-            onGoProPress={openGoProModal}
-          />
-        )}
+        {/* Universal Header - changes based on current page */}
+        <Header 
+          isAuthenticated={isAuthenticated}
+          onLoginPress={() => openAuthModal('login')}
+          onProfilePress={openProfileModal}
+          onGoProPress={openGoProModal}
+          showBackButton={currentPage === 'recipes'}
+          onBackPress={() => setCurrentPage('main')}
+        />
         
         <MainContent 
           isAuthenticated={isAuthenticated}
@@ -273,6 +276,10 @@ export default function App() {
           refreshDashboard={fetchUserProfile}
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}
+          recipes={recipes}
+          setRecipes={setRecipes}
+          analysisResult={analysisResult}
+          setAnalysisResult={setAnalysisResult}
         />
 
         {/* Auth Modal */}
