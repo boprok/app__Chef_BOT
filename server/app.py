@@ -843,6 +843,41 @@ async def health():
     preview = (key[:4] + "..." + key[-2:]) if has_key and len(key) > 8 else (key if has_key else None)
     return HealthResponse(provider=provider, model=model, hasKey=has_key, keyPreview=preview)
 
+@app.get("/api/debug/supabase")
+async def debug_supabase():
+    """Debug endpoint to test Supabase connection"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Test user_sessions table specifically
+            sessions_response = await client.get(
+                f"{SUPABASE_URL}/rest/v1/user_sessions?limit=1",
+                headers=SUPABASE_HEADERS
+            )
+            
+            # Try a test insert
+            test_data = {
+                "user_id": "00000000-0000-0000-0000-000000000001",
+                "device_id": "debug-test",
+                "device_info": {"test": True},
+                "refresh_token_hash": "test-hash",
+                "is_active": True
+            }
+            
+            insert_response = await client.post(
+                f"{SUPABASE_URL}/rest/v1/user_sessions",
+                headers=SUPABASE_HEADERS,
+                json=test_data
+            )
+            
+            return {
+                "supabase_url_prefix": SUPABASE_URL[:50] + "..." if SUPABASE_URL else "Not set",
+                "sessions_get": f"{sessions_response.status_code} - {sessions_response.text[:100]}",
+                "sessions_post": f"{insert_response.status_code} - {insert_response.text[:100]}",
+                "headers_count": len(SUPABASE_HEADERS) if SUPABASE_HEADERS else 0
+            }
+    except Exception as e:
+        return {"error": str(e), "error_type": type(e).__name__}
+
 # ===== APP STARTUP =====
 if __name__ == "__main__":
     import uvicorn
