@@ -260,9 +260,15 @@ async def create_user_session(user_id: str, device_id: str, device_info: dict, r
         )
         
         if response.status_code not in [200, 201]:
+            print(f"Failed to create session: {response.status_code} - {response.text}")
             raise HTTPException(status_code=500, detail="Failed to create session")
         
-        return response.json()
+        # Handle empty response for successful creation
+        try:
+            return response.json() if response.text else {"status": "created"}
+        except Exception as json_error:
+            print(f"Session created but couldn't parse response: {json_error}")
+            return {"status": "created"}
 
 async def invalidate_user_session(user_id: str, refresh_token: str):
     """Invalidate a specific user session"""
