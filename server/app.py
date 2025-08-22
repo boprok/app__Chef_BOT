@@ -248,7 +248,7 @@ async def create_user_session(user_id: str, device_id: str, device_info: dict, r
             "user_id": user_id,
             "device_id": device_id,
             "device_info": device_info,
-            "token_hash": hash_token(refresh_token),
+            "refresh_token_hash": hash_token(refresh_token),
             "is_active": True,
             "expires_at": (datetime.utcnow() + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
         }

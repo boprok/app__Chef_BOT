@@ -44,11 +44,26 @@ export const authService = {
         platform: Platform.OS
       };
       
-      const response = await authAPI.secureLogin(email, password, deviceInfo);
-      await this.storeTokens(response.token, response.refresh_token);
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
-      authAPI.setToken(response.token);
-      return response;
+      // Try secure login first
+      try {
+        console.log('Attempting secure login...');
+        const response = await authAPI.secureLogin(email, password, deviceInfo);
+        await this.storeTokens(response.token, response.refresh_token);
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
+        authAPI.setToken(response.token);
+        console.log('Secure login successful');
+        return response;
+      } catch (secureError) {
+        console.warn('Secure login failed, falling back to regular login:', secureError.message);
+        
+        // Fallback to regular login
+        const response = await authAPI.login(email, password);
+        await this.storeTokens(response.token, response.refresh_token);
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
+        authAPI.setToken(response.token);
+        console.log('Regular login successful');
+        return response;
+      }
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
