@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from './api';
 import { Platform } from 'react-native';
-import * as Application from 'expo-application';
 
 const TOKEN_KEY = 'chef_bot_token';
 const REFRESH_TOKEN_KEY = 'chef_bot_refresh_token';
@@ -17,12 +16,11 @@ const getDeviceId = async () => {
     
     if (!deviceId) {
       // Generate new device ID using available identifiers
-      const applicationId = Application.applicationId || 'unknown-app';
-      const installationId = await Application.getInstallationTimeAsync();
       const platform = Platform.OS;
       const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 15);
       
-      deviceId = `${platform}-${applicationId}-${installationId}-${timestamp}`;
+      deviceId = `${platform}-${timestamp}-${random}`;
       await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
     }
     
@@ -106,6 +104,8 @@ export const authService = {
     try {
       const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
       if (!refreshToken) {
+        console.log('No refresh token available, clearing auth state...');
+        await this.logout();
         throw new Error('No refresh token available');
       }
 
@@ -126,12 +126,20 @@ export const authService = {
   async getValidToken() {
     try {
       const token = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!token) return null;
+      if (!token) {
+        console.log('No access token found');
+        return null;
+      }
 
       const isExpired = await this.isTokenExpired();
       if (isExpired) {
         console.log('Token expired, attempting refresh...');
-        return await this.refreshAccessToken();
+        try {
+          return await this.refreshAccessToken();
+        } catch (refreshError) {
+          console.log('Refresh failed, user needs to login again');
+          return null;
+        }
       }
 
       return token;
