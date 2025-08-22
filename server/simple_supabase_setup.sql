@@ -1,18 +1,17 @@
--- Migration script for existing Chef Bot database
--- Use this if you need to modify existing structure
+-- Simple and safe user_sessions table creation for Supabase
+-- This script avoids test inserts that could cause foreign key errors
 
--- Step 1: Check current users table structure
+-- Check if users table exists and its structure
 SELECT 
+    table_name,
     column_name, 
     data_type, 
     is_nullable
 FROM information_schema.columns 
 WHERE table_name = 'users' 
-ORDER BY ordinal_position;
+ORDER BY table_name, ordinal_position;
 
--- Step 2: Create user_sessions table with UUID user_id to match Supabase users table
--- Supabase uses UUID for users.id by default
-
+-- Create user_sessions table
 DROP TABLE IF EXISTS user_sessions CASCADE;
 
 CREATE TABLE user_sessions (
@@ -28,30 +27,32 @@ CREATE TABLE user_sessions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     expires_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() + INTERVAL '7 days',
     
-    -- Foreign key constraint - now matches UUID type
+    -- Foreign key constraint
     CONSTRAINT fk_user_sessions_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     
-    -- Ensure one active session per user per device
+    -- Unique constraint for single device policy
     CONSTRAINT unique_active_user_device UNIQUE(user_id, device_id)
 );
 
--- Step 3: Add indexes
+-- Create performance indexes
 CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_active ON user_sessions(user_id, is_active) WHERE is_active = true;
 CREATE INDEX idx_user_sessions_token_hash ON user_sessions(refresh_token_hash);
 CREATE INDEX idx_user_sessions_device ON user_sessions(device_id);
 CREATE INDEX idx_user_sessions_expires ON user_sessions(expires_at) WHERE is_active = true;
 
--- Step 4: Add helper functions
+-- Create helper functions
 CREATE OR REPLACE FUNCTION cleanup_expired_sessions()
 RETURNS INTEGER AS $$
 DECLARE
     deleted_count INTEGER;
 BEGIN
+    -- Mark expired sessions as inactive
     UPDATE user_sessions 
     SET is_active = false 
     WHERE expires_at < NOW() AND is_active = true;
     
+    -- Delete old inactive sessions (older than 30 days)
     DELETE FROM user_sessions 
     WHERE expires_at < NOW() - INTERVAL '30 days';
     
@@ -63,6 +64,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION invalidate_other_user_sessions(p_user_id UUID, p_device_id TEXT)
 RETURNS VOID AS $$
 BEGIN
+    -- Mark all other active sessions for this user as inactive
     UPDATE user_sessions 
     SET is_active = false, 
         last_activity = NOW()
@@ -72,22 +74,31 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Step 5: Enable RLS if needed
+-- Enable Row Level Security
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 
--- Basic RLS policies
+-- Create permissive RLS policy (adjust as needed for your auth setup)
+DROP POLICY IF EXISTS "Users can manage own sessions" ON user_sessions;
 CREATE POLICY "Users can manage own sessions" ON user_sessions
-    USING (true)  -- Temporarily permissive, adjust based on your auth setup
+    FOR ALL
+    USING (true)
     WITH CHECK (true);
 
--- Final verification - check table structure
+-- Verification query
 SELECT 
-    'Migration completed' as status,
+    'user_sessions table created successfully' as status,
     COUNT(*) as total_columns,
     (SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'user_sessions') as total_indexes,
     (SELECT COUNT(*) FROM pg_constraint WHERE conrelid = 'user_sessions'::regclass) as total_constraints
 FROM information_schema.columns 
 WHERE table_name = 'user_sessions';
 
--- Show existing users for reference (optional - comment out if not needed)
--- SELECT id, email FROM users LIMIT 5;
+-- Show table structure
+SELECT 
+    column_name,
+    data_type,
+    is_nullable,
+    column_default
+FROM information_schema.columns 
+WHERE table_name = 'user_sessions' 
+ORDER BY ordinal_position;
