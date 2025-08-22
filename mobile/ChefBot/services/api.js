@@ -108,27 +108,16 @@ class ChefBotAPI {
   }
 
   async secureLogin(email, password, deviceInfo) {
-    return this.request('/api/auth/secure-login', {
+    return this.request('/api/auth/login-secure', {
       method: 'POST',
       body: JSON.stringify({ 
         email, 
         password,
         device_id: deviceInfo.device_id,
-        device_name: deviceInfo.device_name,
-        platform: deviceInfo.platform
-      }),
-    });
-  }
-
-  async secureLogin(email, password, deviceInfo) {
-    return this.request('/api/auth/secure-login', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        email, 
-        password,
-        device_id: deviceInfo.device_id,
-        device_name: deviceInfo.device_name,
-        platform: deviceInfo.platform
+        device_info: {
+          device_name: deviceInfo.device_name,
+          platform: deviceInfo.platform
+        }
       }),
     });
   }
