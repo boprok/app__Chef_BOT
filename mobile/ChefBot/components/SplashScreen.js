@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SvgXml } from 'react-native-svg';
@@ -6,7 +6,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { styles } from '../styles/AppStyles';
 import { logoSvg } from '../assets/svgIcons';
 
-export const SplashScreen = () => {
+export const SplashScreen = ({ statusMessage = "Preparing your kitchen..." }) => {
+  const [loadingStep, setLoadingStep] = useState(0);
+  
+  const loadingMessages = [
+    "Preparing your kitchen...",
+    "Checking authentication...",
+    "Loading your recipes...",
+    "Almost ready!"
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLoadingStep(prev => (prev + 1) % loadingMessages.length);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <SafeAreaView style={styles.splashContainer} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar style="light" />
@@ -27,7 +44,9 @@ export const SplashScreen = () => {
             <View style={[styles.dot, styles.dot2]} />
             <View style={[styles.dot, styles.dot3]} />
           </View>
-          <Text style={styles.loadingText}>Preparing your kitchen...</Text>
+          <Text style={styles.loadingText}>
+            {statusMessage || loadingMessages[loadingStep]}
+          </Text>
         </View>
       </View>
       

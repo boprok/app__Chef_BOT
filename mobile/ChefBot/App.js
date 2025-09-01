@@ -21,8 +21,10 @@ import { GoProPageModal } from './components/modals/GoProPageModal';
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
   const [user, setUser] = useState(null);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
+  const [authCheckComplete, setAuthCheckComplete] = useState(false);
   // Modal states
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('login');
@@ -70,8 +72,48 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    checkAuthStatus();
+    initializeApp();
   }, []);
+
+  // Handle authentication flow after splash
+  useEffect(() => {
+    if (authCheckComplete && !showSplash) {
+      if (!isAuthenticated) {
+        // Show appropriate auth modal based on user status
+        if (isFirstTimeUser) {
+          openAuthModal('signup');
+        } else {
+          openAuthModal('login');
+        }
+      }
+    }
+  }, [authCheckComplete, showSplash, isAuthenticated, isFirstTimeUser]);
+
+  const initializeApp = async () => {
+    try {
+      // Show splash for minimum time to ensure good UX
+      const minSplashTime = 2000; // 2 seconds minimum
+      const startTime = Date.now();
+      
+      // Check authentication status
+      await checkAuthStatus();
+      
+      // Ensure splash shows for minimum time
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, minSplashTime - elapsedTime);
+      
+      setTimeout(() => {
+        setShowSplash(false);
+      }, remainingTime);
+      
+    } catch (error) {
+      console.error('App initialization failed:', error);
+      // Still hide splash even if there's an error
+      setTimeout(() => {
+        setShowSplash(false);
+      }, 2000);
+    }
+  };
 
   // Handle first-time user flow
   useEffect(() => {
@@ -83,19 +125,32 @@ export default function App() {
 
   const checkAuthStatus = async () => {
     try {
+      setIsLoading(true);
+      
       const token = await authService.getToken();
       const userData = await authService.getUser();
       
       if (token && userData) {
-        // Initialize the API service with the stored token
-        await authService.initializeAuth();
-        setIsAuthenticated(true);
-        setUser(userData);
-        setIsFirstTimeUser(false);
+        // Try to validate token with server
+        try {
+          await authService.initializeAuth();
+          setIsAuthenticated(true);
+          setUser(userData);
+          setIsFirstTimeUser(false);
+          console.log('✅ User authenticated successfully');
+        } catch (authError) {
+          // Token is invalid or expired
+          console.log('❌ Token validation failed:', authError.message);
+          await authService.logout(); // Clear invalid tokens
+          setIsAuthenticated(false);
+          setUser(null);
+          setIsFirstTimeUser(false); // Not first time, just needs to login again
+        }
       } else {
+        // No token or user data - first time user or logged out
         setIsAuthenticated(false);
         setUser(null);
-        setIsFirstTimeUser(true);
+        setIsFirstTimeUser(!token && !userData); // First time if no token AND no user data
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -104,6 +159,7 @@ export default function App() {
       setIsFirstTimeUser(true);
     } finally {
       setIsLoading(false);
+      setAuthCheckComplete(true);
     }
   };
 
@@ -250,8 +306,8 @@ export default function App() {
     }
   };
 
-  // Loading screen
-  if (isLoading) {
+  // Show splash screen during initialization
+  if (showSplash || isLoading) {
     return <SplashScreen />;
   }
 
