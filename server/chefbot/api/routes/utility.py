@@ -61,6 +61,22 @@ async def debug_sessions():
     except Exception as e:
         return {"error": f"Error fetching sessions: {str(e)}"}
 
+@router.get("/debug/openapi")
+async def debug_openapi():
+    """Debug endpoint to test OpenAPI schema generation"""
+    try:
+        # Try to access the app's OpenAPI schema
+        from main import app
+        schema = app.openapi()
+        return {
+            "status": "ok", 
+            "message": "OpenAPI schema generated successfully",
+            "paths_count": len(schema.get("paths", {})),
+            "schemas_count": len(schema.get("components", {}).get("schemas", {}))
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"OpenAPI generation failed: {str(e)}"}
+
 @router.get("/debug/user-counts")
 async def debug_user_counts():
     """Debug endpoint showing user statistics"""

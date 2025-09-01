@@ -51,7 +51,23 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+    # Add explicit OpenAPI configuration
+    openapi_tags=[
+        {
+            "name": "authentication",
+            "description": "User authentication and session management",
+        },
+        {
+            "name": "analysis", 
+            "description": "Recipe analysis from food images",
+        },
+        {
+            "name": "utility",
+            "description": "Health checks and debugging endpoints",
+        },
+    ]
 )
 
 # Add CORS middleware
