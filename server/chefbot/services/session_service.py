@@ -1,10 +1,11 @@
-"""User session management service"""
+"""Session management service"""
+import hashlib
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 import httpx
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
 from fastapi import HTTPException
 from config.settings import settings
-from app.utils.auth import hash_token
+from chefbot.utils.auth import hash_token
 
 class SessionService:
     """Service for managing user sessions"""

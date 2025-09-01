@@ -4,8 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import httpx
 from config.settings import settings
-from app.api.routes import auth, analyze, utility
-from app.services.session_service import SessionService
+from chefbot.api.routes import auth, analyze, utility
+from chefbot.services.session_service import SessionService
 
 # Initialize session service
 session_service = SessionService()

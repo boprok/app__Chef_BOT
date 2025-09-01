@@ -3,8 +3,8 @@ import base64
 import asyncio
 from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
-from app.models.schemas import AnalyzeResponse, Recipe
-from app.api.routes.auth import get_current_user
+from chefbot.models.schemas import AnalyzeResponse, Recipe
+from chefbot.api.routes.auth import get_current_user
 from config.settings import settings
 import httpx
 

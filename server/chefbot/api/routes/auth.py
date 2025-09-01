@@ -1,13 +1,16 @@
 """Authentication routes"""
-import httpx
+import uuid
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.models.schemas import (
-    UserCreate, UserLogin, LoginRequest, RefreshTokenRequest, 
-    LogoutRequest, AuthResponse
+import httpx
+from chefbot.models.schemas import (
+    UserCreate, UserLogin, LoginRequest, AuthResponse, RefreshTokenRequest, 
+    LogoutRequest, UserSession
 )
-from app.utils.auth import verify_password, create_token_pair, verify_token
-from app.services.session_service import SessionService
+from chefbot.utils.auth import verify_password, create_token_pair, verify_token, hash_password
+from chefbot.services.session_service import SessionService
 from config.settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
@@ -54,7 +57,6 @@ async def signup(user_data: UserCreate):
             raise HTTPException(status_code=409, detail="Email already registered")
         
         # Create new user
-        from app.utils.auth import hash_password
         new_user = {
             "email": user_data.email,
             "password_hash": hash_password(user_data.password),
