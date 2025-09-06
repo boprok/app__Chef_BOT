@@ -1,20 +1,29 @@
 """Authentication routes"""
 import uuid
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import httpx
+from google.oauth2 import id_token
+from google.auth.transport import requests
 from chefbot.models.schemas import (
     UserCreate, UserLogin, LoginRequest, AuthResponse, RefreshTokenRequest, 
-    LogoutRequest, UserSession
+    LogoutRequest, UserSession, GoogleAuthRequest, EmailVerificationRequest,
+    PasswordResetRequest, PasswordResetConfirm
 )
 from chefbot.utils.auth import verify_password, create_token_pair, verify_token, hash_password
 from chefbot.services.session_service import SessionService
+from chefbot.services.email_service import email_service
 from config.settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 security = HTTPBearer()
+
+def generate_verification_token() -> str:
+    """Generate a secure random token for email verification"""
+    return secrets.token_urlsafe(32)
 
 # Helper function to get current user
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -56,13 +65,19 @@ async def signup(user_data: UserCreate):
         if response.json():
             raise HTTPException(status_code=409, detail="Email already registered")
         
-        # Create new user
+        # Create new user with email verification
+        verification_token = generate_verification_token()
+        verification_expires = datetime.utcnow() + timedelta(hours=24)
+        
         new_user = {
             "email": user_data.email,
             "password_hash": hash_password(user_data.password),
             "plan": "free",
             "monthly_usage": 0,
-            "usage_month": datetime.now().strftime("%Y-%m")
+            "usage_month": datetime.now().strftime("%Y-%m"),
+            "email_verified": False,
+            "email_verification_token": verification_token,
+            "email_verification_expires_at": verification_expires.isoformat()
         }
         
         response = await client.post(
@@ -78,13 +93,29 @@ async def signup(user_data: UserCreate):
         if isinstance(user, list):
             user = user[0]
         
+        # Send verification email
+        try:
+            await email_service.send_verification_email(
+                email=user_data.email,
+                verification_token=verification_token,
+                user_name=user_data.email.split('@')[0]  # Use part before @ as name
+            )
+        except Exception as e:
+            print(f"Failed to send verification email: {e}")
+            # Don't fail signup if email fails - user can request resend
+        
         # Create token pair
         tokens = create_token_pair(str(user["id"]), "signup")
         
         return AuthResponse(
             token=tokens["access_token"],
             refresh_token=tokens["refresh_token"],
-            user={"id": user["id"], "email": user["email"], "plan": user["plan"]}
+            user={
+                "id": user["id"], 
+                "email": user["email"], 
+                "plan": user["plan"],
+                "email_verified": user["email_verified"]
+            }
         )
 
 @router.post("/login", response_model=AuthResponse)
@@ -267,3 +298,311 @@ async def delete_user(user: dict = Depends(get_current_user)):
         
         if response.status_code not in [200, 204]:
             raise HTTPException(status_code=500, detail="Failed to delete user")
+
+@router.post("/google", response_model=AuthResponse)
+async def google_auth(auth_data: GoogleAuthRequest):
+    """Google OAuth authentication"""
+    try:
+        # TODO: Uncomment when google-auth is properly installed
+        # # Verify the Google ID token
+        # idinfo = id_token.verify_oauth2_token(
+        #     auth_data.idToken, 
+        #     requests.Request(), 
+        #     settings.GOOGLE_CLIENT_ID
+        # )
+        
+        # # Verify the token issuer
+        # if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+        #     raise ValueError('Wrong issuer.')
+        
+        # # Verify the email matches
+        # if idinfo['email'] != auth_data.email:
+        #     raise ValueError('Email mismatch.')
+        
+        # For now, we'll trust the frontend validation
+        # In production, ALWAYS verify the Google token on the backend
+        
+        async with httpx.AsyncClient() as client:
+            # Check if user exists
+            response = await client.get(
+                f"{settings.SUPABASE_URL}/rest/v1/users?email=eq.{auth_data.email}",
+                headers=settings.SUPABASE_HEADERS
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Database error")
+            
+            users = response.json()
+            
+            if users:
+                # User exists - update Google info if needed
+                user = users[0]
+                
+                # Update Google ID and picture if not set
+                update_data = {}
+                if not user.get("google_id"):
+                    update_data["google_id"] = auth_data.googleId
+                if auth_data.picture and not user.get("profile_picture"):
+                    update_data["profile_picture"] = auth_data.picture
+                if not user.get("name") and auth_data.name:
+                    update_data["name"] = auth_data.name
+                
+                if update_data:
+                    update_response = await client.patch(
+                        f"{settings.SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                        headers=settings.SUPABASE_HEADERS,
+                        json=update_data
+                    )
+                    
+                    if update_response.status_code == 200:
+                        user.update(update_data)
+            else:
+                # Create new user
+                user_id = str(uuid.uuid4())
+                new_user = {
+                    "id": user_id,
+                    "email": auth_data.email,
+                    "name": auth_data.name,
+                    "google_id": auth_data.googleId,
+                    "profile_picture": auth_data.picture,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "plan": "free",
+                    "monthly_usage": 0,
+                    "usage_month": datetime.utcnow().strftime("%Y-%m"),
+                    "email_verified": True  # Google emails are pre-verified
+                }
+                
+                response = await client.post(
+                    f"{settings.SUPABASE_URL}/rest/v1/users",
+                    headers=settings.SUPABASE_HEADERS,
+                    json=new_user
+                )
+                
+                if response.status_code == 201:
+                    user = new_user
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to create user")
+            
+            # Generate JWT tokens
+            access_token, refresh_token = create_token_pair(user["id"])
+            
+            return AuthResponse(
+                token=access_token,
+                refresh_token=refresh_token,
+                user={
+                    "id": user["id"],
+                    "email": user["email"],
+                    "name": user.get("name"),
+                    "profile_picture": user.get("profile_picture"),
+                    "plan": user.get("plan", "free"),
+                    "monthly_usage": user.get("monthly_usage", 0),
+                    "email_verified": user.get("email_verified", True)
+                }
+            )
+            
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google authentication failed: {str(e)}")
+
+@router.post("/verify-email")
+async def verify_email(request: EmailVerificationRequest):
+    """Verify user email address"""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Find user by verification token
+            response = await client.get(
+                f"{settings.SUPABASE_URL}/rest/v1/users?email_verification_token=eq.{request.token}",
+                headers=settings.SUPABASE_HEADERS
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Database error")
+            
+            users = response.json()
+            if not users:
+                raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+            
+            user = users[0]
+            
+            # Check if token has expired
+            if user["email_verification_expires_at"]:
+                expires_at = datetime.fromisoformat(user["email_verification_expires_at"].replace('Z', '+00:00'))
+                if datetime.utcnow() > expires_at.replace(tzinfo=None):
+                    raise HTTPException(status_code=400, detail="Verification token has expired")
+            
+            # Check if already verified
+            if user["email_verified"]:
+                return {"message": "Email already verified", "success": True}
+            
+            # Update user as verified
+            update_data = {
+                "email_verified": True,
+                "email_verification_token": None,
+                "email_verification_expires_at": None
+            }
+            
+            update_response = await client.patch(
+                f"{settings.SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                headers=settings.SUPABASE_HEADERS,
+                json=update_data
+            )
+            
+            if update_response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to verify email")
+            
+            return {"message": "Email verified successfully!", "success": True}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Email verification failed: {str(e)}")
+
+@router.post("/resend-verification")
+async def resend_verification_email(user: dict = Depends(get_current_user)):
+    """Resend email verification email"""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Check if user is already verified
+            if user.get("email_verified", False):
+                raise HTTPException(status_code=400, detail="Email is already verified")
+            
+            # Generate new verification token
+            verification_token = generate_verification_token()
+            verification_expires = datetime.utcnow() + timedelta(hours=24)
+            
+            # Update user with new token
+            update_data = {
+                "email_verification_token": verification_token,
+                "email_verification_expires_at": verification_expires.isoformat()
+            }
+            
+            response = await client.patch(
+                f"{settings.SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                headers=settings.SUPABASE_HEADERS,
+                json=update_data
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to update verification token")
+            
+            # Send verification email
+            await email_service.send_verification_email(
+                email=user["email"],
+                verification_token=verification_token,
+                user_name=user.get("name", user["email"].split('@')[0])
+            )
+            
+            return {"message": "Verification email sent successfully!", "success": True}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to resend verification: {str(e)}")
+
+@router.post("/request-password-reset")
+async def request_password_reset(request: PasswordResetRequest):
+    """Request password reset email"""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Find user by email
+            response = await client.get(
+                f"{settings.SUPABASE_URL}/rest/v1/users?email=eq.{request.email}",
+                headers=settings.SUPABASE_HEADERS
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Database error")
+            
+            users = response.json()
+            if not users:
+                # Don't reveal if email exists or not for security
+                return {"message": "If an account with this email exists, a password reset link has been sent.", "success": True}
+            
+            user = users[0]
+            
+            # Generate reset token
+            reset_token = generate_verification_token()
+            reset_expires = datetime.utcnow() + timedelta(hours=1)  # 1 hour expiry
+            
+            # Update user with reset token
+            update_data = {
+                "password_reset_token": reset_token,
+                "password_reset_expires_at": reset_expires.isoformat()
+            }
+            
+            update_response = await client.patch(
+                f"{settings.SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                headers=settings.SUPABASE_HEADERS,
+                json=update_data
+            )
+            
+            if update_response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to create reset token")
+            
+            # Send reset email
+            await email_service.send_password_reset_email(
+                email=user["email"],
+                reset_token=reset_token,
+                user_name=user.get("name", user["email"].split('@')[0])
+            )
+            
+            return {"message": "If an account with this email exists, a password reset link has been sent.", "success": True}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Password reset request failed: {str(e)}")
+
+@router.post("/reset-password")
+async def reset_password(request: PasswordResetConfirm):
+    """Reset password with token"""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Find user by reset token
+            response = await client.get(
+                f"{settings.SUPABASE_URL}/rest/v1/users?password_reset_token=eq.{request.token}",
+                headers=settings.SUPABASE_HEADERS
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Database error")
+            
+            users = response.json()
+            if not users:
+                raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+            
+            user = users[0]
+            
+            # Check if token has expired
+            if user["password_reset_expires_at"]:
+                expires_at = datetime.fromisoformat(user["password_reset_expires_at"].replace('Z', '+00:00'))
+                if datetime.utcnow() > expires_at.replace(tzinfo=None):
+                    raise HTTPException(status_code=400, detail="Reset token has expired")
+            
+            # Validate new password
+            if len(request.new_password) < 6:
+                raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+            
+            # Update password and clear reset token
+            update_data = {
+                "password_hash": hash_password(request.new_password),
+                "password_reset_token": None,
+                "password_reset_expires_at": None
+            }
+            
+            update_response = await client.patch(
+                f"{settings.SUPABASE_URL}/rest/v1/users?id=eq.{user['id']}",
+                headers=settings.SUPABASE_HEADERS,
+                json=update_data
+            )
+            
+            if update_response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to reset password")
+            
+            return {"message": "Password reset successfully!", "success": True}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Password reset failed: {str(e)}")

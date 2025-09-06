@@ -42,9 +42,13 @@ CREATE INDEX idx_user_sessions_token_hash ON user_sessions(refresh_token_hash);
 CREATE INDEX idx_user_sessions_device ON user_sessions(device_id);
 CREATE INDEX idx_user_sessions_expires ON user_sessions(expires_at) WHERE is_active = true;
 
--- Step 4: Add helper functions
+-- Step 4: Add helper functions with secure search_path
 CREATE OR REPLACE FUNCTION cleanup_expired_sessions()
-RETURNS INTEGER AS $$
+RETURNS INTEGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
     deleted_count INTEGER;
 BEGIN
@@ -58,10 +62,16 @@ BEGIN
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
 END;
-$$ LANGUAGE plpgsql;
+$$;
+
+COMMENT ON FUNCTION cleanup_expired_sessions() IS 'Cleanup expired user sessions. Secure search_path implementation.';
 
 CREATE OR REPLACE FUNCTION invalidate_other_user_sessions(p_user_id UUID, p_device_id TEXT)
-RETURNS VOID AS $$
+RETURNS VOID 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
     UPDATE user_sessions 
     SET is_active = false, 
@@ -70,7 +80,9 @@ BEGIN
       AND device_id != p_device_id 
       AND is_active = true;
 END;
-$$ LANGUAGE plpgsql;
+$$;
+
+COMMENT ON FUNCTION invalidate_other_user_sessions(UUID, TEXT) IS 'Invalidate other user sessions for single device login. Secure search_path implementation.';
 
 -- Step 5: Enable RLS if needed
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;

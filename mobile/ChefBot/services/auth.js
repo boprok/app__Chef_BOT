@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from './api';
+import GoogleAuthService from './GoogleAuthService';
 import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'chef_bot_token';
@@ -7,6 +8,7 @@ const REFRESH_TOKEN_KEY = 'chef_bot_refresh_token';
 const USER_KEY = 'chef_bot_user';
 const TOKEN_EXPIRY_KEY = 'chef_bot_token_expiry';
 const DEVICE_ID_KEY = 'chef_bot_device_id';
+const AUTH_TYPE_KEY = 'chef_bot_auth_type'; // 'email' or 'google'
 
 // Generate or get device ID
 const getDeviceId = async () => {
@@ -50,6 +52,7 @@ export const authService = {
         const response = await authAPI.secureLogin(email, password, deviceInfo);
         await this.storeTokens(response.token, response.refresh_token);
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
+        await AsyncStorage.setItem(AUTH_TYPE_KEY, 'email'); // Track auth type
         authAPI.setToken(response.token);
         console.log('Secure login successful');
         return response;
@@ -60,6 +63,7 @@ export const authService = {
         const response = await authAPI.login(email, password);
         await this.storeTokens(response.token, response.refresh_token);
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
+        await AsyncStorage.setItem(AUTH_TYPE_KEY, 'email'); // Track auth type
         authAPI.setToken(response.token);
         console.log('Regular login successful');
         return response;
@@ -76,10 +80,25 @@ export const authService = {
       const response = await authAPI.signup(email, password);
       await this.storeTokens(response.token, response.refresh_token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.user));
+      await AsyncStorage.setItem(AUTH_TYPE_KEY, 'email'); // Track auth type
       authAPI.setToken(response.token);
       return response;
     } catch (error) {
       console.error('Signup failed:', error);
+      throw error;
+    }
+  },
+
+  // Google OAuth login
+  async googleLogin(googleUser) {
+    try {
+      // This will be called from AuthModal after Google sign-in
+      // The tokens are already stored by the AuthModal
+      await AsyncStorage.setItem(AUTH_TYPE_KEY, 'google'); // Track auth type
+      console.log('Google login completed');
+      return { success: true };
+    } catch (error) {
+      console.error('Google login failed:', error);
       throw error;
     }
   },
@@ -167,7 +186,8 @@ export const authService = {
   // Logout and clear storage
   async logout() {
     try {
-      // Get refresh token before clearing storage
+      // Get auth type and refresh token before clearing storage
+      const authType = await AsyncStorage.getItem(AUTH_TYPE_KEY);
       const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
       
       // Call server logout endpoint if we have a refresh token
@@ -180,12 +200,25 @@ export const authService = {
         }
       }
       
+      // If user logged in with Google, also logout from Google
+      if (authType === 'google') {
+        try {
+          await GoogleAuthService.signOut();
+          console.log('Google logout successful');
+        } catch (error) {
+          console.warn('Google logout failed, proceeding with local logout:', error);
+        }
+      }
+      
       // Clear local storage
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
       await AsyncStorage.removeItem(TOKEN_EXPIRY_KEY);
       await AsyncStorage.removeItem(USER_KEY);
+      await AsyncStorage.removeItem(AUTH_TYPE_KEY);
       authAPI.setToken(null);
+      
+      console.log('Logout completed successfully');
     } catch (error) {
       console.error('Logout failed:', error);
     }

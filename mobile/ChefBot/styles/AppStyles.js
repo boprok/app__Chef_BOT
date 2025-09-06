@@ -245,6 +245,50 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  // Google Sign-In Styles
+  googleSignInButton: {
+    backgroundColor: '#4285f4',
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  googleIcon: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginRight: 12,
+    backgroundColor: '#ffffff',
+    color: '#4285f4',
+    width: 20,
+    height: 20,
+    textAlign: 'center',
+    borderRadius: 2,
+    lineHeight: 20,
+  },
+  googleSignInText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  authDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  authDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  authDividerText: {
+    marginHorizontal: 16,
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+
   // Dashboard Modal Styles
   dashboardModalContainer: {
     width: '90%',

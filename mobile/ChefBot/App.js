@@ -187,6 +187,16 @@ export default function App() {
     return emailRegex.test(email);
   };
 
+  // Handle authentication success (both regular and Google auth)
+  const handleAuthSuccess = (userData) => {
+    setIsAuthenticated(true);
+    setUser(userData);
+    setIsFirstTimeUser(false);
+    setShowAuthModal(false);
+    setEmail('');
+    setPassword('');
+  };
+
   const handleAuth = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -215,12 +225,7 @@ export default function App() {
 
       // Backend returns {token, user} on success
       if (result.token && result.user) {
-        setIsAuthenticated(true);
-        setUser(result.user);
-        setIsFirstTimeUser(false);
-        setShowAuthModal(false);
-        setEmail('');
-        setPassword('');
+        handleAuthSuccess(result.user);
         
         Alert.alert(
           'Success!', 
@@ -351,6 +356,7 @@ export default function App() {
           isSubmitting={isSubmitting}
           onSubmit={handleAuth}
           isFirstTimeUser={isFirstTimeUser}
+          onAuth={handleAuthSuccess}
         />
 
         {/* Dashboard Modal */}

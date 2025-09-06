@@ -10,3 +10,5 @@ supabase==2.4.2
 bcrypt==4.0.1
 passlib==1.7.4
 python-multipart==0.0.9
+google-auth==2.23.3
+resend==0.7.0

@@ -16,6 +16,13 @@ class Settings:
     JWT_ACCESS_TOKEN_EXPIRE_HOURS: int = 24
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
+    # Google OAuth Configuration
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID")
+    
+    # Email Configuration (Resend)
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://your-app-domain.com")
+    
     # Usage Limits
     FREE_MAX_MONTHLY: int = int(os.getenv("FREE_MAX_MONTHLY", "10"))
     FREE_DELAY_SECONDS: float = float(os.getenv("FREE_DELAY_SECONDS", "2.0"))

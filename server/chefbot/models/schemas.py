@@ -28,6 +28,23 @@ class AuthResponse(BaseModel):
     refresh_token: Optional[str] = None
     user: dict
 
+class GoogleAuthRequest(BaseModel):
+    email: EmailStr
+    name: str
+    googleId: str
+    idToken: str
+    picture: Optional[str] = None
+
+class EmailVerificationRequest(BaseModel):
+    token: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
 # ===== RECIPE MODELS =====
 class Recipe(BaseModel):
     title: str
